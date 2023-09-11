@@ -56,13 +56,18 @@ app.get("/", (req, res) => {
 app.post("/predict", async (req, res) => {
     let err;
 
-    const url = req.body.url;
+    const url = (typeof req.body.url !== 'undefined') ? req.body.url : "";
     // Check and make sure if it is valid and safe url
     const extractedUrl = extractUrl(url);
+    if (extractedUrl === null) {
+        err = new Error("URL is not detected");
+        err.name = "ValidationError";
+        return res.status(400).json({ "message": err.message });
+    }
 
     // Check and reject if it has multiple url
     if (extractedUrl.length > 1) {
-        err = new Error("Multiple URL Not supported");
+        err = new Error("Multiple URL is not supported");
         err.name = "ValidationError";
         return res.status(400).json({ "message": err.message });
     }
