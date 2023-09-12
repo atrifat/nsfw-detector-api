@@ -13,13 +13,18 @@ import {
     deleteFile
 } from "./util.mjs";
 import { sha256 } from "js-sha256";
+import * as dotenv from 'dotenv';
+import bearerToken from 'express-bearer-token';
+
+// Load env variable from .env
+dotenv.config()
 
 // Generic error variable
 let err;
 
 // Load nsfw detection model
 const nsfwSpy = new NsfwSpy(
-    "file://./models/mobilenet-v1.0.0/model.json"
+    "file://models/mobilenet-v1.0.0/model.json"
 );
 
 const IMG_DOWNLOAD_PATH = "/tmp/";
@@ -37,7 +42,9 @@ const keyv = new Keyv();
 // Handle connection errors
 keyv.on("error", (err) => console.log("Connection Error", err));
 
-const port = process.env.PORT || 8081;
+const PORT = process.env.PORT || 8081;
+const ENABLE_API_TOKEN = process.env.ENABLE_API_TOKEN ? process.env.ENABLE_API_TOKEN === 'true' : false;
+const API_TOKEN = process.env.API_TOKEN || "myapitokenchangethislater";
 
 const app = express();
 app.use(bodyparser.json())
@@ -48,6 +55,30 @@ const reqLogger = function (req, _res, next) {
 };
 
 app.use(reqLogger);
+
+// Simple authentication middleware
+const authMiddleware = function (req, res, next) {
+    if (ENABLE_API_TOKEN) {
+        const token = typeof req.token !== 'undefined' ? req.token : null;
+        if (!token) {
+            const error = new Error('Missing API token');
+            error.statusCode = 401
+            return res.status(401).json({ "message": error.message });
+        }
+
+        if (API_TOKEN !== token) {
+            const error = new Error('Invalid API token');
+            error.statusCode = 401
+            return res.status(401).json({ "message": error.message });
+        }
+    }
+    next();
+};
+
+// Extract auth token if it is exist
+app.use(bearerToken());
+
+app.use(authMiddleware);
 
 app.get("/", (req, res) => {
     res.status(200).json({ "data": "A PoC of NSFW detector, send your post url data to /predict to get prediction result" });
@@ -141,6 +172,6 @@ app.post("/predict", async (req, res) => {
     res.status(200).json({ "data": cache });
 });
 
-app.listen(port, () => {
-    console.log(`Listening on ${port} ...`);
+app.listen(PORT, () => {
+    console.log(`Listening on ${PORT} ...`);
 });
