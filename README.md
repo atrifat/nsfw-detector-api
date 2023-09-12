@@ -23,6 +23,7 @@ node src/index.mjs
 If you want to test the API server, you can use GUI tools like [Postman](https://www.postman.com/) or using curl.
 ```
 curl --header "Content-Type: application/json" \
+  --header "Authorization: Bearer myapitokenchangethislater" \
   --request POST \
   --data '{"url":"https://example.org/image.jpg"}' \
   http://localhost:8081/predict
