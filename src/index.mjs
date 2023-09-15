@@ -47,7 +47,7 @@ const ENABLE_API_TOKEN = process.env.ENABLE_API_TOKEN ? process.env.ENABLE_API_T
 const API_TOKEN = process.env.API_TOKEN || "myapitokenchangethislater";
 
 const app = express();
-app.use(bodyparser.json())
+app.use(bodyparser.json({ limit: '5mb' }));
 
 const reqLogger = function (req, _res, next) {
     console.info(`${req.method} request to "${req.url}" by ${req.hostname}`);
@@ -167,6 +167,60 @@ app.post("/predict", async (req, res) => {
     // Cleanup image file
     let deleteResult;
     [err, deleteResult] = await to.default(deleteFile(IMG_DOWNLOAD_PATH + filename));
+    [err, deleteResult] = await to.default(deleteFile(IMG_DOWNLOAD_PATH + filename + "_" + "final"));
+
+    res.status(200).json({ "data": cache });
+});
+
+app.post("/predict_data", async (req, res) => {
+    let err;
+
+    const base64_data = (typeof req.body.data !== 'undefined') ? req.body.data : null;
+
+    if (base64_data === null) {
+        err = new Error("Data input is empty, please send base64 string data as input");
+        err.name = "ValidationError";
+        return res.status(400).json({ "message": err.message });
+    }
+
+    const buffer = Buffer.from(base64_data, 'base64');
+
+    const filename = sha256(base64_data);
+    let cache = await keyv.get("data" + "-" + filename);
+    // Return cache result immediately if it is exist
+    if (cache) {
+        return res.status(200).json({ "data": cache });
+    }
+
+    // Load metadata for debugging
+    const img = sharp(buffer);
+    let metadata;
+    [err, metadata] = await to.default(img.metadata());
+
+    if (err) return res.status(500).json({ "message": err.message });
+    console.debug(metadata);
+
+    console.time("Preprocess");
+    let outputInfo;
+    [err, outputInfo] = await to.default(
+        // Resize to 224 px since it is the input size of model
+        img.resize(224).jpeg().withMetadata().toFile(IMG_DOWNLOAD_PATH + filename + "_" + "final")
+    );
+    if (err) return res.status(500).json({ "message": err.message });
+    console.timeEnd("Preprocess");
+
+    console.time("Classify");
+    [err, cache] = await to.default(nsfwSpy.classifyImageFile(IMG_DOWNLOAD_PATH + filename + "_" + "final"));
+    if (err) return res.status(500).json({ "message": err.message });
+
+    // Set cache result for 1 day
+    await keyv.set("data" + "-" + filename, cache, 24 * 60 * 60 * 1000);
+
+    console.timeEnd("Classify");
+    console.debug(cache);
+
+    // Cleanup image file
+    let deleteResult;
     [err, deleteResult] = await to.default(deleteFile(IMG_DOWNLOAD_PATH + filename + "_" + "final"));
 
     res.status(200).json({ "data": cache });
