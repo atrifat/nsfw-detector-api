@@ -21,12 +21,22 @@ node src/index.mjs
 ```
 
 If you want to test the API server, you can use GUI tools like [Postman](https://www.postman.com/) or using curl.
+
+Send request by using image URL:
 ```
 curl --header "Content-Type: application/json" \
   --header "Authorization: Bearer myapitokenchangethislater" \
   --request POST \
   --data '{"url":"https://example.org/image.jpg"}' \
   http://localhost:8081/predict
+```
+or send request by using base64 string of the image:
+```
+curl --header "Content-Type: application/json" \
+  --header "Authorization: Bearer myapitokenchangethislater" \
+  --request POST \
+  --data '{"data":"base64stringhere"}' \
+  http://localhost:8081/predict_data
 ```
 The output is JSON which consists of four predicted classes (based on [NsfwSpy.js](https://github.com/NsfwSpy/NsfwSpy.js)) as follows:
 ```
