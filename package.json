@@ -1,6 +1,6 @@
 {
   "name": "nsfw-detector-api",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "A simple PoC (Proof of Concept) NSFW Detector API Server",
   "exports": null,
   "type": "module",
@@ -10,7 +10,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "devDependencies": {
     "@types/express": "^4.17.17",
     "@types/node": "^20.6.0",
