@@ -1,6 +1,9 @@
 # nsfw-detector-api
 A simple PoC (Proof of Concept) NSFW Detector API Server using [NsfwSpy.js](https://github.com/NsfwSpy/NsfwSpy.js) model. The goal of this PoC is to be a simple example of how to integrate existing ML model in API server.
 
+## Demo
+A demo instance is available on [HuggingFace Spaces - https://atrifat-nsfw-detector-api-demo.hf.space/](https://atrifat-nsfw-detector-api-demo.hf.space/) using default `API_TOKEN` as shown in `.env.example` file.
+
 ## Getting Started
 Published docker image is available in [ghcr.io](https://github.com/atrifat/nsfw-detector-api/pkgs/container/nsfw-detector-api).
 Run it instantly:
