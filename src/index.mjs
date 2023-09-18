@@ -45,6 +45,7 @@ keyv.on("error", (err) => console.log("Connection Error", err));
 const PORT = process.env.PORT || 8081;
 const ENABLE_API_TOKEN = process.env.ENABLE_API_TOKEN ? process.env.ENABLE_API_TOKEN === 'true' : false;
 const API_TOKEN = process.env.API_TOKEN || "myapitokenchangethislater";
+const ENABLE_CONTENT_TYPE_CHECK = process.env.ENABLE_CONTENT_TYPE_CHECK ? process.env.ENABLE_CONTENT_TYPE_CHECK === 'true' : true;
 
 const app = express();
 app.use(bodyparser.json({ limit: '5mb' }));
@@ -103,24 +104,26 @@ app.post("/predict", async (req, res) => {
         return res.status(400).json({ "message": err.message });
     }
 
-    // Check metadata info before downloading
-    let contentInfo;
-    [err, contentInfo] = await to.default(getContentInfo(url));
+    if (ENABLE_CONTENT_TYPE_CHECK) {
+        // Check metadata info before downloading
+        let contentInfo;
+        [err, contentInfo] = await to.default(getContentInfo(url));
 
-    if (err) {
-        return res.status(400).json({ "message": err.message });
+        if (err) {
+            return res.status(400).json({ "message": err.message });
+        }
+
+        // Reject non image type data
+        let isImageType = isContentTypeImageType(contentInfo.contentType);
+        if (!isImageType) {
+            err = new Error("Only image URL is acceptable");
+            err.name = "ValidationError";
+            return res.status(400).json({ "message": err.message });
+        }
+
+        console.debug(isImageType);
+        console.debug(contentInfo);
     }
-
-    // Reject non image type data
-    let isImageType = isContentTypeImageType(contentInfo.contentType);
-    if (!isImageType) {
-        err = new Error("Only image URL is acceptable");
-        err.name = "ValidationError";
-        return res.status(400).json({ "message": err.message });
-    }
-
-    console.debug(isImageType);
-    console.debug(contentInfo);
 
     const filename = sha256(url);
 
