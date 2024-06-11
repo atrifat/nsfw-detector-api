@@ -1,6 +1,6 @@
 import express from "express";
 import bodyparser from 'body-parser';
-import { NsfwSpy } from "@nsfwspy/node";
+import { NsfwSpy } from "./nsfw-detector.mjs";
 import sharp from "sharp";
 import Keyv from "keyv";
 import to from "await-to-js";
@@ -36,7 +36,6 @@ handleFatalError(err);
 
 console.timeEnd("load model");
 
-// const Keyv = require('keyv');
 const keyv = new Keyv();
 
 // Handle connection errors
@@ -139,7 +138,7 @@ app.post("/predict", async (req, res) => {
     );
     if (err) return res.status(500).json({ "message": err.message });
     // handleFatalError(err);
-    console.debug(downloadStatus);
+    console.debug("downloadStatus" + "-" + filename, downloadStatus);
 
     // Load metadata for debugging
     const img = sharp(IMG_DOWNLOAD_PATH + filename);
@@ -147,24 +146,23 @@ app.post("/predict", async (req, res) => {
     [err, metadata] = await to.default(img.metadata());
 
     if (err) return res.status(500).json({ "message": err.message });
-    console.debug(metadata);
 
-    console.time("Preprocess");
+    console.time("Preprocess" + "-" + filename);
     let outputInfo;
     [err, outputInfo] = await to.default(
         // Resize to 224 px since it is the input size of model
         img.resize(224).jpeg().withMetadata().toFile(IMG_DOWNLOAD_PATH + filename + "_" + "final")
     );
     if (err) return res.status(500).json({ "message": err.message });
-    console.timeEnd("Preprocess");
+    console.timeEnd("Preprocess" + "-" + filename);
 
-    console.time("Classify");
+    console.time("Classify" + "-" + filename);
     [err, cache] = await to.default(nsfwSpy.classifyImageFile(IMG_DOWNLOAD_PATH + filename + "_" + "final"));
     if (err) return res.status(500).json({ "message": err.message });
     // Set cache result for 1 day
     await keyv.set("url" + "-" + filename, cache, 24 * 60 * 60 * 1000);
 
-    console.timeEnd("Classify");
+    console.timeEnd("Classify" + "-" + filename);
     console.debug(cache);
 
     // Cleanup image file
@@ -203,23 +201,23 @@ app.post("/predict_data", async (req, res) => {
     if (err) return res.status(500).json({ "message": err.message });
     console.debug(metadata);
 
-    console.time("Preprocess");
+    console.time("Preprocess" + "-" + filename);
     let outputInfo;
     [err, outputInfo] = await to.default(
         // Resize to 224 px since it is the input size of model
         img.resize(224).jpeg().withMetadata().toFile(IMG_DOWNLOAD_PATH + filename + "_" + "final")
     );
     if (err) return res.status(500).json({ "message": err.message });
-    console.timeEnd("Preprocess");
+    console.timeEnd("Preprocess" + "-" + filename);
 
-    console.time("Classify");
+    console.time("Classify" + "-" + filename);
     [err, cache] = await to.default(nsfwSpy.classifyImageFile(IMG_DOWNLOAD_PATH + filename + "_" + "final"));
     if (err) return res.status(500).json({ "message": err.message });
 
     // Set cache result for 1 day
     await keyv.set("data" + "-" + filename, cache, 24 * 60 * 60 * 1000);
 
-    console.timeEnd("Classify");
+    console.timeEnd("Classify" + "-" + filename);
     console.debug(cache);
 
     // Cleanup image file
