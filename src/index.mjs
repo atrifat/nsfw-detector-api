@@ -4,14 +4,19 @@ import { NsfwSpy } from "./nsfw-detector.mjs";
 import sharp from "sharp";
 import Keyv from "keyv";
 import to from "await-to-js";
-import { downloadFile, getContentInfo } from "./download.mjs";
+import { downloadFile, downloadPartFile, getContentInfo } from "./download.mjs";
 import {
     extractUrl,
     isContentTypeImageType,
+    isContentTypeVideoType,
     cleanUrlWithoutParam,
     handleFatalError,
-    deleteFile
+    deleteFile,
+    moveFile,
+    getUrlType
 } from "./util.mjs";
+import * as ffmpeg from "@ffmpeg-installer/ffmpeg";
+import { generateScreenshot } from "./ffmpeg-util.mjs";
 import { sha256 } from "js-sha256";
 import * as dotenv from 'dotenv';
 import bearerToken from 'express-bearer-token';
@@ -44,9 +49,21 @@ keyv.on("error", (err) => console.log("Connection Error", err));
 const PORT = process.env.PORT || 8081;
 const ENABLE_API_TOKEN = process.env.ENABLE_API_TOKEN ? process.env.ENABLE_API_TOKEN === 'true' : false;
 const API_TOKEN = process.env.API_TOKEN || "myapitokenchangethislater";
-const ENABLE_CONTENT_TYPE_CHECK = process.env.ENABLE_CONTENT_TYPE_CHECK ? process.env.ENABLE_CONTENT_TYPE_CHECK === 'true' : true;
+const ENABLE_CONTENT_TYPE_CHECK = process.env.ENABLE_CONTENT_TYPE_CHECK ? process.env.ENABLE_CONTENT_TYPE_CHECK === 'true' : false;
+const FFMPEG_PATH = process.env.FFMPEG_PATH || ffmpeg.path;
+const MAX_VIDEO_SIZE_MB = parseInt(process.env.MAX_VIDEO_SIZE_MB || 100);
 
 const app = express();
+
+// Cleanup all temporary file
+const cleanupTemporaryFile = async (filename) => {
+    let deleteResult;
+    [err, deleteResult] = await to.default(deleteFile(IMG_DOWNLOAD_PATH + filename));
+    [err, deleteResult] = await to.default(deleteFile(IMG_DOWNLOAD_PATH + filename + "_" + "video"));
+    [err, deleteResult] = await to.default(deleteFile(IMG_DOWNLOAD_PATH + filename + "_" + "final"));
+    return true;
+};
+
 app.use(bodyparser.json({ limit: '5mb' }));
 
 const reqLogger = function (req, _res, next) {
@@ -112,15 +129,16 @@ app.post("/predict", async (req, res) => {
             return res.status(400).json({ "message": err.message });
         }
 
-        // Reject non image type data
+        // Reject non image/video type data
         let isImageType = isContentTypeImageType(contentInfo.contentType);
-        if (!isImageType) {
-            err = new Error("Only image URL is acceptable");
+        let isVideoType = isContentTypeVideoType(contentInfo.contentType);
+        if (!(isImageType === true || isVideoType === true)) {
+            console.debug(contentInfo);
+            err = new Error("Only image/video URL is acceptable");
             err.name = "ValidationError";
             return res.status(400).json({ "message": err.message });
         }
 
-        console.debug(isImageType);
         console.debug(contentInfo);
     }
 
@@ -132,11 +150,46 @@ app.post("/predict", async (req, res) => {
         return res.status(200).json({ "data": cache });
     }
 
-    let downloadStatus;
-    [err, downloadStatus] = await to.default(
-        downloadFile(url, IMG_DOWNLOAD_PATH + filename)
-    );
-    if (err) return res.status(500).json({ "message": err.message });
+    console.debug(url, "=", filename);
+
+    let downloadStatus, screenshotStatus;
+
+    let urlType = getUrlType(url);
+
+    if (urlType === "video") {
+        [err, downloadStatus] = await to.default(
+            downloadPartFile(url, IMG_DOWNLOAD_PATH + filename + "_" + "video", MAX_VIDEO_SIZE_MB * 1024 * 1024)
+        );
+        if (err) {
+            // Cleanup all image file                                             
+            await (cleanupTemporaryFile(filename));
+            return res.status(500).json({ "message": err.message });
+        }
+
+        // Generate screenshot file for image classification
+        [err, screenshotStatus] = await to.default(
+            generateScreenshot(IMG_DOWNLOAD_PATH + filename + "_" + "video", IMG_DOWNLOAD_PATH + filename + ".jpg", FFMPEG_PATH)
+        );
+
+        await to.default(moveFile(IMG_DOWNLOAD_PATH + filename + ".jpg", IMG_DOWNLOAD_PATH + filename));
+
+        if (err) {
+            // Cleanup all image file                                             
+            await (cleanupTemporaryFile(filename));
+            return res.status(500).json({ "message": err.message });
+        }
+    }
+    else {
+        [err, downloadStatus] = await to.default(
+            downloadFile(url, IMG_DOWNLOAD_PATH + filename)
+        );
+        if (err) {
+            // Cleanup all image file                                             
+            await (cleanupTemporaryFile(filename));
+            return res.status(500).json({ "message": err.message });
+        }
+    }
+
     // handleFatalError(err);
     console.debug("downloadStatus" + "-" + filename, downloadStatus);
 
@@ -145,7 +198,11 @@ app.post("/predict", async (req, res) => {
     let metadata;
     [err, metadata] = await to.default(img.metadata());
 
-    if (err) return res.status(500).json({ "message": err.message });
+    if (err) {
+        // Cleanup all image file                                             
+        await (cleanupTemporaryFile(filename));
+        return res.status(500).json({ "message": err.message });
+    }
 
     console.time("Preprocess" + "-" + filename);
     let outputInfo;
@@ -153,22 +210,29 @@ app.post("/predict", async (req, res) => {
         // Resize to 224 px since it is the input size of model
         img.resize(224).jpeg().withMetadata().toFile(IMG_DOWNLOAD_PATH + filename + "_" + "final")
     );
-    if (err) return res.status(500).json({ "message": err.message });
+
+    if (err) {
+        // Cleanup all image file                                             
+        await (cleanupTemporaryFile(filename));
+        return res.status(500).json({ "message": err.message });
+    }
     console.timeEnd("Preprocess" + "-" + filename);
 
     console.time("Classify" + "-" + filename);
     [err, cache] = await to.default(nsfwSpy.classifyImageFile(IMG_DOWNLOAD_PATH + filename + "_" + "final"));
-    if (err) return res.status(500).json({ "message": err.message });
+    if (err) {
+        // Cleanup all image file                                             
+        await (cleanupTemporaryFile(filename));
+        return res.status(500).json({ "message": err.message });
+    }
     // Set cache result for 1 day
     await keyv.set("url" + "-" + filename, cache, 24 * 60 * 60 * 1000);
 
     console.timeEnd("Classify" + "-" + filename);
     console.debug(cache);
 
-    // Cleanup image file
-    let deleteResult;
-    [err, deleteResult] = await to.default(deleteFile(IMG_DOWNLOAD_PATH + filename));
-    [err, deleteResult] = await to.default(deleteFile(IMG_DOWNLOAD_PATH + filename + "_" + "final"));
+    // Cleanup all image file                                             
+    await (cleanupTemporaryFile(filename));
 
     res.status(200).json({ "data": cache });
 });
