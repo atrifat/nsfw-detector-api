@@ -2,7 +2,7 @@ import express from "express";
 import bodyparser from 'body-parser';
 import { NsfwSpy } from "./nsfw-detector.mjs";
 import sharp from "sharp";
-import Keyv from "keyv";
+import { LRUCache } from "lru-cache";
 import to from "await-to-js";
 import { downloadFile, downloadPartFile, getContentInfo } from "./download.mjs";
 import {
@@ -41,10 +41,15 @@ handleFatalError(err);
 
 console.timeEnd("load model");
 
-const keyv = new Keyv();
-
-// Handle connection errors
-keyv.on("error", (err) => console.log("Connection Error", err));
+const CACHE_DURATION_IN_SECONDS = parseInt(process.env.CACHE_DURATION_IN_SECONDS || 86400);
+const MAX_CACHE_ITEM_NUM = parseInt(process.env.MAX_CACHE_ITEM_NUM || 200000);
+const resultCache = new LRUCache(
+    {
+        max: MAX_CACHE_ITEM_NUM,
+        // how long to live in ms
+        ttl: CACHE_DURATION_IN_SECONDS * 1000,
+    },
+);
 
 const PORT = process.env.PORT || 8081;
 const ENABLE_API_TOKEN = process.env.ENABLE_API_TOKEN ? process.env.ENABLE_API_TOKEN === 'true' : false;
@@ -144,7 +149,7 @@ app.post("/predict", async (req, res) => {
 
     const filename = sha256(url);
 
-    let cache = await keyv.get("url" + "-" + filename);
+    let cache = resultCache.get("url" + "-" + filename);
     // Return cache result immediately if it is exist
     if (cache) {
         return res.status(200).json({ "data": cache });
@@ -171,7 +176,7 @@ app.post("/predict", async (req, res) => {
             generateScreenshot(IMG_DOWNLOAD_PATH + filename + "_" + "video", IMG_DOWNLOAD_PATH + filename + ".jpg", FFMPEG_PATH)
         );
 
-        await to.default(moveFile(IMG_DOWNLOAD_PATH + filename + ".jpg", IMG_DOWNLOAD_PATH + filename  + "_" + "image"));
+        await to.default(moveFile(IMG_DOWNLOAD_PATH + filename + ".jpg", IMG_DOWNLOAD_PATH + filename + "_" + "image"));
 
         if (err) {
             // Cleanup all image file                                             
@@ -225,8 +230,8 @@ app.post("/predict", async (req, res) => {
         await (cleanupTemporaryFile(filename));
         return res.status(500).json({ "message": err.message });
     }
-    // Set cache result for 1 day
-    await keyv.set("url" + "-" + filename, cache, 24 * 60 * 60 * 1000);
+    // Set cache result
+    resultCache.set("url" + "-" + filename, cache);
 
     console.timeEnd("Classify" + "-" + filename);
     console.debug(cache);
