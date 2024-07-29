@@ -12,6 +12,8 @@ FROM node:18-bookworm-slim as final
 ENV PORT=8081
 ENV API_TOKEN=myapitokenchangethislater
 ENV ENABLE_API_TOKEN=false
+ENV IMG_DOWNLOAD_PATH=/tmp/
+ENV MAX_VIDEO_SIZE_MB=100
 ARG APP_USER=node
 
 WORKDIR /app
