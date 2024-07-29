@@ -41,11 +41,13 @@ handleFatalError(err);
 
 console.timeEnd("load model");
 
+const CACHE_DURATION_IN_SECONDS = parseInt(process.env.CACHE_DURATION_IN_SECONDS || 86400);
+const MAX_CACHE_ITEM_NUM = parseInt(process.env.MAX_CACHE_ITEM_NUM || 200000);
 const resultCache = new LRUCache(
     {
-        max: 200000,
-        // how long to live in ms (1 days)
-        ttl: 1 * 24 * 60 * 60 * 1000,
+        max: MAX_CACHE_ITEM_NUM,
+        // how long to live in ms
+        ttl: CACHE_DURATION_IN_SECONDS * 1000,
     },
 );
 
