@@ -26,7 +26,7 @@
     "express": "^4.19.2",
     "express-bearer-token": "^2.4.0",
     "js-sha256": "^0.10.1",
-    "keyv": "^4.5.4",
+    "lru-cache": "^11.0.0",
     "sharp": "^0.33.4",
     "url-regex-safe": "^4.0.0"
   }
