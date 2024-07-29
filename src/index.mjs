@@ -32,7 +32,7 @@ const nsfwSpy = new NsfwSpy(
     "file://models/mobilenet-v1.0.0/model.json"
 );
 
-const IMG_DOWNLOAD_PATH = "/tmp/";
+const IMG_DOWNLOAD_PATH = process.env.IMG_DOWNLOAD_PATH ?? "/tmp/";
 
 console.time("load model");
 let statusLoad;
