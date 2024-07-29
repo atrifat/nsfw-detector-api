@@ -32,7 +32,7 @@ const nsfwSpy = new NsfwSpy(
     "file://models/mobilenet-v1.0.0/model.json"
 );
 
-const IMG_DOWNLOAD_PATH = "/tmp/";
+const IMG_DOWNLOAD_PATH = process.env.IMG_DOWNLOAD_PATH ?? "/tmp/";
 
 console.time("load model");
 let statusLoad;
@@ -58,7 +58,7 @@ const app = express();
 // Cleanup all temporary file
 const cleanupTemporaryFile = async (filename) => {
     let deleteResult;
-    [err, deleteResult] = await to.default(deleteFile(IMG_DOWNLOAD_PATH + filename));
+    [err, deleteResult] = await to.default(deleteFile(IMG_DOWNLOAD_PATH + filename + "_" + "image"));
     [err, deleteResult] = await to.default(deleteFile(IMG_DOWNLOAD_PATH + filename + "_" + "video"));
     [err, deleteResult] = await to.default(deleteFile(IMG_DOWNLOAD_PATH + filename + "_" + "final"));
     return true;
@@ -171,7 +171,7 @@ app.post("/predict", async (req, res) => {
             generateScreenshot(IMG_DOWNLOAD_PATH + filename + "_" + "video", IMG_DOWNLOAD_PATH + filename + ".jpg", FFMPEG_PATH)
         );
 
-        await to.default(moveFile(IMG_DOWNLOAD_PATH + filename + ".jpg", IMG_DOWNLOAD_PATH + filename));
+        await to.default(moveFile(IMG_DOWNLOAD_PATH + filename + ".jpg", IMG_DOWNLOAD_PATH + filename  + "_" + "image"));
 
         if (err) {
             // Cleanup all image file                                             
@@ -181,7 +181,7 @@ app.post("/predict", async (req, res) => {
     }
     else {
         [err, downloadStatus] = await to.default(
-            downloadFile(url, IMG_DOWNLOAD_PATH + filename)
+            downloadFile(url, IMG_DOWNLOAD_PATH + filename + "_" + "image")
         );
         if (err) {
             // Cleanup all image file                                             
@@ -194,7 +194,7 @@ app.post("/predict", async (req, res) => {
     console.debug("downloadStatus" + "-" + filename, downloadStatus);
 
     // Load metadata for debugging
-    const img = sharp(IMG_DOWNLOAD_PATH + filename);
+    const img = sharp(IMG_DOWNLOAD_PATH + filename + "_" + "image");
     let metadata;
     [err, metadata] = await to.default(img.metadata());
 
