@@ -57,6 +57,7 @@ const API_TOKEN = process.env.API_TOKEN || "myapitokenchangethislater";
 const ENABLE_CONTENT_TYPE_CHECK = process.env.ENABLE_CONTENT_TYPE_CHECK ? process.env.ENABLE_CONTENT_TYPE_CHECK === 'true' : false;
 const FFMPEG_PATH = process.env.FFMPEG_PATH || ffmpeg.path;
 const MAX_VIDEO_SIZE_MB = parseInt(process.env.MAX_VIDEO_SIZE_MB || 100);
+const REQUEST_TIMEOUT_IN_SECONDS = parseInt(process.env.REQUEST_TIMEOUT_IN_SECONDS || 60);
 
 const app = express();
 
@@ -128,7 +129,7 @@ app.post("/predict", async (req, res) => {
     if (ENABLE_CONTENT_TYPE_CHECK) {
         // Check metadata info before downloading
         let contentInfo;
-        [err, contentInfo] = await to.default(getContentInfo(url));
+        [err, contentInfo] = await to.default(getContentInfo(url, REQUEST_TIMEOUT_IN_SECONDS * 1000));
 
         if (err) {
             return res.status(400).json({ "message": err.message });
@@ -163,7 +164,7 @@ app.post("/predict", async (req, res) => {
 
     if (urlType === "video") {
         [err, downloadStatus] = await to.default(
-            downloadPartFile(url, IMG_DOWNLOAD_PATH + filename + "_" + "video", MAX_VIDEO_SIZE_MB * 1024 * 1024)
+            downloadPartFile(url, IMG_DOWNLOAD_PATH + filename + "_" + "video", MAX_VIDEO_SIZE_MB * 1024 * 1024, REQUEST_TIMEOUT_IN_SECONDS * 1000)
         );
         if (err) {
             // Cleanup all image file                                             
@@ -186,7 +187,7 @@ app.post("/predict", async (req, res) => {
     }
     else {
         [err, downloadStatus] = await to.default(
-            downloadFile(url, IMG_DOWNLOAD_PATH + filename + "_" + "image")
+            downloadFile(url, IMG_DOWNLOAD_PATH + filename + "_" + "image", REQUEST_TIMEOUT_IN_SECONDS * 1000)
         );
         if (err) {
             // Cleanup all image file                                             
