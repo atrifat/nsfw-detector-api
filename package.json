@@ -21,7 +21,7 @@
     "@tensorflow/tfjs-node-gpu": "^4.20.0",
     "async-mutex": "^0.5.0",
     "await-to-js": "^3.0.0",
-    "axios": "^1.7.2",
+    "axios": "^1.7.4",
     "body-parser": "^1.20.2",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
