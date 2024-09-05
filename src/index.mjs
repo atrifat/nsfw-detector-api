@@ -20,6 +20,7 @@ import { generateScreenshot } from "./ffmpeg-util.mjs";
 import { sha256 } from "js-sha256";
 import * as dotenv from 'dotenv';
 import bearerToken from 'express-bearer-token';
+import { Mutex } from 'async-mutex';
 
 // Load env variable from .env
 dotenv.config()
@@ -60,6 +61,9 @@ const MAX_VIDEO_SIZE_MB = parseInt(process.env.MAX_VIDEO_SIZE_MB || 100);
 const REQUEST_TIMEOUT_IN_SECONDS = parseInt(process.env.REQUEST_TIMEOUT_IN_SECONDS || 60);
 
 const app = express();
+
+// Map to hold mutexes for each URL
+const mutexes = new Map();
 
 // Cleanup all temporary file
 const cleanupTemporaryFile = async (filename) => {
@@ -150,6 +154,19 @@ app.post("/predict", async (req, res) => {
 
     const filename = sha256(url);
 
+    // Get or create a mutex for the specific URL represented by filename
+    let mutex = mutexes.get(filename);
+    if (!mutex) {
+        mutex = new Mutex();
+        mutexes.set(filename, mutex);
+    }
+
+    const release = await mutex.acquire();
+    const safeReleaseMutex = () => {
+        release();
+        mutexes.delete(filename);
+    }
+
     let cache = resultCache.get("url" + "-" + filename);
     // Return cache result immediately if it is exist
     if (cache) {
@@ -169,6 +186,7 @@ app.post("/predict", async (req, res) => {
         if (err) {
             // Cleanup all image file                                             
             await (cleanupTemporaryFile(filename));
+            safeReleaseMutex();
             return res.status(500).json({ "message": err.message });
         }
 
@@ -182,6 +200,7 @@ app.post("/predict", async (req, res) => {
         if (err) {
             // Cleanup all image file                                             
             await (cleanupTemporaryFile(filename));
+            safeReleaseMutex();
             return res.status(500).json({ "message": err.message });
         }
     }
@@ -192,6 +211,7 @@ app.post("/predict", async (req, res) => {
         if (err) {
             // Cleanup all image file                                             
             await (cleanupTemporaryFile(filename));
+            safeReleaseMutex();
             return res.status(500).json({ "message": err.message });
         }
     }
@@ -207,6 +227,7 @@ app.post("/predict", async (req, res) => {
     if (err) {
         // Cleanup all image file                                             
         await (cleanupTemporaryFile(filename));
+        safeReleaseMutex();
         return res.status(500).json({ "message": err.message });
     }
 
@@ -220,6 +241,7 @@ app.post("/predict", async (req, res) => {
     if (err) {
         // Cleanup all image file                                             
         await (cleanupTemporaryFile(filename));
+        safeReleaseMutex();
         return res.status(500).json({ "message": err.message });
     }
     console.timeEnd("Preprocess" + "-" + filename);
@@ -229,6 +251,7 @@ app.post("/predict", async (req, res) => {
     if (err) {
         // Cleanup all image file                                             
         await (cleanupTemporaryFile(filename));
+        safeReleaseMutex();
         return res.status(500).json({ "message": err.message });
     }
     // Set cache result
@@ -239,6 +262,7 @@ app.post("/predict", async (req, res) => {
 
     // Cleanup all image file                                             
     await (cleanupTemporaryFile(filename));
+    safeReleaseMutex();
 
     res.status(200).json({ "data": cache });
 });
