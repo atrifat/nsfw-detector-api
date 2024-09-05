@@ -170,6 +170,7 @@ app.post("/predict", async (req, res) => {
     let cache = resultCache.get("url" + "-" + filename);
     // Return cache result immediately if it is exist
     if (cache) {
+        safeReleaseMutex();
         return res.status(200).json({ "data": cache });
     }
 
