@@ -1,0 +1,52 @@
+FROM node:20-bookworm-slim AS builder
+
+WORKDIR /builder
+
+COPY package*.json ./
+
+RUN npm ci --omit dev
+# RUN npm install
+
+FROM node:20-bookworm-slim AS cuda_installer
+
+WORKDIR /builder
+
+RUN apt update && \
+    apt install -y --no-install-recommends \
+    curl wget openssl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN curl -L https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname -s)-$(uname -m).sh -o $HOME/miniforge-installer.sh && \ 
+    bash $HOME/miniforge-installer.sh -b -u -p $HOME/miniconda3 && rm -rf $HOME/miniforge-installer.sh
+
+RUN $HOME/miniconda3/bin/conda init bash && $HOME/miniconda3/bin/conda config --set auto_activate_base false && \
+    $HOME/miniconda3/bin/conda create -n cuda11 -c conda-forge python=3.9 cudatoolkit=11.6 cudnn=8 -y
+
+FROM node:20-bookworm-slim AS final
+
+ENV PORT=8081
+ENV API_TOKEN=myapitokenchangethislater
+ENV ENABLE_API_TOKEN=false
+ENV IMG_DOWNLOAD_PATH=/tmp/
+ENV MAX_VIDEO_SIZE_MB=100
+ENV CACHE_DURATION_IN_SECONDS=86400
+ENV MAX_CACHE_ITEM_NUM=200000
+ARG APP_USER=node
+ENV USER=$APP_USER
+ENV HOME=/home/$APP_USER
+ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/miniconda3/envs/cuda11/lib/
+ENV TF_FORCE_GPU_ALLOW_GROWTH=true
+
+WORKDIR /app
+
+COPY --from=builder --chown=$APP_USER:$APP_USER /builder/node_modules /app/node_modules
+COPY --from=cuda_installer --chown=$APP_USER:$APP_USER /root/miniconda3 $HOME/miniconda3
+
+COPY --chown=$APP_USER:$APP_USER . .
+
+USER $APP_USER
+
+EXPOSE $PORT
+
+ENTRYPOINT ["node", "src/index.mjs"]
+
