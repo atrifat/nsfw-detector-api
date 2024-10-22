@@ -1,6 +1,6 @@
 # nsfw-detector-api
 
-A simple PoC (Proof of Concept) NSFW Detector API Server using [NsfwSpy.js](https://github.com/NsfwSpy/NsfwSpy.js) model. The goal of this PoC is to be a simple example of how to integrate existing ML model in API server.
+A simple PoC (Proof of Concept) NSFW Detector API Server using [NsfwSpy.js](https://github.com/NsfwSpy/NsfwSpy.js) model.
 
 nsfw-detector-api is a core dependency of [nostr-filter-relay](https://github.com/atrifat/nostr-filter-relay).
 
@@ -10,7 +10,13 @@ Published docker image is available in [ghcr.io](https://github.com/atrifat/nsfw
 Run it instantly:
 
 ```
-docker run --init --rm -p 8081:8081 ghcr.io/atrifat/nsfw-detector-api:latest
+docker run --init --rm -p 8081:8081 ghcr.io/atrifat/nsfw-detector-api:main
+```
+
+or using docker image with CUDA drivers included and NVIDIA docker runtime:
+
+```
+docker run --gpus all --init --rm -p 8081:8081 ghcr.io/atrifat/nsfw-detector-api:main-cuda
 ```
 
 You can also clone this repository to run or modify it locally
