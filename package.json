@@ -18,17 +18,17 @@
   },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
-    "@tensorflow/tfjs-node-gpu": "^4.20.0",
+    "@tensorflow/tfjs-node-gpu": "^4.22.0",
     "async-mutex": "^0.5.0",
     "await-to-js": "^3.0.0",
-    "axios": "^1.7.4",
-    "body-parser": "^1.20.2",
+    "axios": "^1.7.7",
+    "body-parser": "^1.20.3",
     "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "express-bearer-token": "^2.4.0",
+    "express": "^4.21.1",
+    "express-bearer-token": "^2.2.0",
     "js-sha256": "^0.10.1",
-    "lru-cache": "^11.0.0",
-    "sharp": "^0.33.4",
+    "lru-cache": "^11.0.1",
+    "sharp": "^0.33.5",
     "url-regex-safe": "^4.0.0"
   }
 }
