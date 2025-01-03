@@ -2,7 +2,7 @@ name: CI CUDA
 
 on:
   push:
-    branches: ["main","dev"]
+    branches: ["main", "dev"]
     tags: ["v*"]
   pull_request:
     branches: ["main"]
@@ -52,6 +52,19 @@ jobs:
         uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+      - name: Add CUDA suffix to tags
+        id: modify_tags
+        run: |
+          # Get the tags from the output
+          tags="${{ steps.meta.outputs.tags }}"
+
+          suffix="-cuda"
+
+          # Add suffix to tags
+          modified_tags=$(echo "$tags" | tr ',' '\n' | sed "s/$/$suffix/" | tr '\n' ',' | sed 's/,$//')
+
+          # Set the modified tags and labels as outputs
+          echo "modified_tags=$modified_tags" >> $GITHUB_ENV
       - name: Build and push CUDA image
         uses: docker/build-push-action@v5
         with:
@@ -59,9 +72,7 @@ jobs:
           file: Dockerfile.cuda
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
-          tags: |
-            ${{ steps.meta.outputs.tags }}-cuda
-          labels: |
-            ${{ steps.meta.outputs.labels }}-cuda
+          tags: ${{ env.modified_tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
