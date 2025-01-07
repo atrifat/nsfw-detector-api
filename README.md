@@ -13,7 +13,7 @@ Run it instantly:
 docker run --init --rm -p 8081:8081 ghcr.io/atrifat/nsfw-detector-api:main
 ```
 
-or using docker image with CUDA drivers included and NVIDIA docker runtime:
+or using docker image with CUDA drivers included (marked with `cuda` suffix in the tag name) and [NVIDIA docker runtime (Container Toolkit)](https://github.com/NVIDIA/nvidia-container-toolkit) support:
 
 ```
 docker run --gpus all --init --rm -p 8081:8081 ghcr.io/atrifat/nsfw-detector-api:main-cuda
