@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim AS builder
+FROM node:22-bookworm-slim AS builder
 
 WORKDIR /builder
 
@@ -7,7 +7,7 @@ COPY package*.json ./
 RUN npm ci --omit dev
 # RUN npm install
 
-FROM node:20-bookworm-slim AS final
+FROM node:22-bookworm-slim AS final
 
 ENV PORT=8081
 ENV API_TOKEN=myapitokenchangethislater

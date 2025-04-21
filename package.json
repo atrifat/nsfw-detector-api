@@ -21,14 +21,15 @@
     "@tensorflow/tfjs-node-gpu": "^4.22.0",
     "async-mutex": "^0.5.0",
     "await-to-js": "^3.0.0",
-    "axios": "^1.7.7",
-    "body-parser": "^1.20.3",
-    "dotenv": "^16.4.5",
-    "express": "^4.21.2",
-    "express-bearer-token": "^2.2.0",
-    "js-sha256": "^0.10.1",
-    "lru-cache": "^11.0.1",
-    "sharp": "^0.33.5",
+    "axios": "^1.8.4",
+    "body-parser": "^2.2.0",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "express-bearer-token": "^3.0.0",
+    "js-sha256": "^0.11.0",
+    "lru-cache": "^11.1.0",
+    "mime": "^4.0.7",
+    "sharp": "^0.34.1",
     "url-regex-safe": "^4.0.0"
   }
 }
