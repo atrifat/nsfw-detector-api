@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim AS builder
+FROM node:22-bookworm-slim AS builder
 
 WORKDIR /builder
 
@@ -7,7 +7,7 @@ COPY package*.json ./
 RUN npm ci --omit dev
 # RUN npm install
 
-FROM node:20-bookworm-slim AS cuda_installer
+FROM node:22-bookworm-slim AS cuda_installer
 
 WORKDIR /builder
 
@@ -22,7 +22,7 @@ RUN curl -L https://github.com/conda-forge/miniforge/releases/latest/download/Mi
 RUN $HOME/miniconda3/bin/conda init bash && $HOME/miniconda3/bin/conda config --set auto_activate_base false && \
     $HOME/miniconda3/bin/conda create -n cuda11 -c conda-forge python=3.9 cudatoolkit=11.6 cudnn=8 -y
 
-FROM node:20-bookworm-slim AS final
+FROM node:22-bookworm-slim AS final
 
 ENV PORT=8081
 ENV API_TOKEN=myapitokenchangethislater
