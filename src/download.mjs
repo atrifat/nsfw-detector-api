@@ -79,7 +79,9 @@ export const downloadPartFile = async (url, outputFile, maxVideoSize, timeout = 
     response = await axios.head(url, { timeout: timeout });
   }
 
-  const fileSize = parseInt(response.headers['content-length']);
+  let fileSize = parseInt(response.headers['content-length']);
+  // Workaround the issue where Content-Length is not available/reliable for some video hosts
+  if (isNaN(fileSize) || fileSize <= 0) fileSize = maxVideoSize;
   console.debug(url, "fileSize (MB)", (fileSize / (1024 * 1024)));
 
   // Download immediately if file is smaller than target maxVideoSize
