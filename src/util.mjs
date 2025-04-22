@@ -30,7 +30,7 @@ export const getUrlType = function (path) {
     n == ".gif" ||
     n == ".webp") {
     return "image";
-  } else if (n == ".mp4" || n == ".mov" || n == ".wmv" || n == ".webm" || n == ".avi") {
+  } else if (n == ".mp4" || n == ".mov" || n == ".wmv" || n == ".webm" || n == ".avi" || n == ".mkv") {
     return "video";
   } else {
     return "link";
