@@ -123,7 +123,7 @@ export const getContentInfo = async function (src, timeout = 60000) {
       ) {
         const contentLength = response.headers["content-length"];
         const contentType = response.headers["content-type"];
-        const extension = mime.extension(contentType);
+        const extension = mime.getExtension(contentType);
         // console.log(response.headers);
         const output = {
           contentLength: contentLength ? parseInt(contentLength) : 0,
