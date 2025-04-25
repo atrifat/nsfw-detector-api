@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import axios from "axios";
 import mime from "mime";
 
-export const downloadFile = async function (src, dest, timeout = 60000, extraHeaders) {
+export const downloadFile = async function (src, dest, timeout = 60000, extraHeaders = {}) {
   return await axios({
     method: "GET",
     url: src,
@@ -65,10 +65,10 @@ const saveOutput = async (outputFile, response, size) => {
   });
 };
 
-export const downloadPartFile = async (url, outputFile, maxVideoSize, timeout = 60000) => {
+export const downloadPartFile = async (url, outputFile, maxVideoSize, timeout = 60000, extraHeaders = {}) => {
   maxVideoSize = maxVideoSize !== undefined ? maxVideoSize : 1024 * 1024 * 100;
 
-  let response = await axios.head(url, { timeout: timeout });
+  let response = await axios.head(url, { headers: extraHeaders, timeout: timeout });
   // console.log(response.headers);
 
   // Check and follow redirect if it is available
@@ -76,7 +76,7 @@ export const downloadPartFile = async (url, outputFile, maxVideoSize, timeout = 
     const newUrl = response.headers.get('location');
     // console.log("redirect", newUrl);
     url = newUrl;
-    response = await axios.head(url, { timeout: timeout });
+    response = await axios.head(url, { headers: extraHeaders, timeout: timeout });
   }
 
   let fileSize = parseInt(response.headers['content-length']);
@@ -86,17 +86,18 @@ export const downloadPartFile = async (url, outputFile, maxVideoSize, timeout = 
 
   // Download immediately if file is smaller than or equal to target maxVideoSize
   if (fileSize <= maxVideoSize) {
-    const response = await axios.get(url, { responseType: 'stream', timeout: timeout });
+    const response = await axios.get(url, { headers: extraHeaders, responseType: 'stream', timeout: timeout });
     await saveOutput(outputFile, response, fileSize);
     return true;
   }
 
   // Set range headers to download with partial bytes size
-  const headers = {
+  const rangeHeaders = {
+    ...extraHeaders,
     Range: `bytes=0-${maxVideoSize - 1}`
   };
 
-  response = await axios.get(url, { headers, responseType: 'stream', timeout: timeout });
+  response = await axios.get(url, { headers: rangeHeaders, responseType: 'stream', timeout: timeout });
 
   if (response.status === 206) {
     // console.log("Server returned partial content.");
@@ -108,11 +109,12 @@ export const downloadPartFile = async (url, outputFile, maxVideoSize, timeout = 
   }
 };
 
-export const getContentInfo = async function (src, timeout = 60000) {
+export const getContentInfo = async function (src, timeout = 60000, extraHeaders = {}) {
   return await axios({
     method: "HEAD",
     url: src,
-    timeout: timeout
+    timeout: timeout,
+    headers: { ...extraHeaders },
   })
     .then(function (response) {
       if (
