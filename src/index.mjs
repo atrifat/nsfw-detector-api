@@ -59,6 +59,7 @@ const ENABLE_CONTENT_TYPE_CHECK = process.env.ENABLE_CONTENT_TYPE_CHECK ? proces
 const FFMPEG_PATH = process.env.FFMPEG_PATH || ffmpeg.path;
 const MAX_VIDEO_SIZE_MB = parseInt(process.env.MAX_VIDEO_SIZE_MB || 100);
 const REQUEST_TIMEOUT_IN_SECONDS = parseInt(process.env.REQUEST_TIMEOUT_IN_SECONDS || 60);
+const USER_AGENT = process.env.USER_AGENT || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36';
 
 const app = express();
 
@@ -130,10 +131,14 @@ app.post("/predict", async (req, res) => {
         return res.status(400).json({ "message": err.message });
     }
 
+    const extraHeaders = {
+        'User-Agent': USER_AGENT,
+    };
+
     if (ENABLE_CONTENT_TYPE_CHECK) {
         // Check metadata info before downloading
         let contentInfo;
-        [err, contentInfo] = await to.default(getContentInfo(url, REQUEST_TIMEOUT_IN_SECONDS * 1000));
+        [err, contentInfo] = await to.default(getContentInfo(url, REQUEST_TIMEOUT_IN_SECONDS * 1000, extraHeaders));
 
         if (err) {
             return res.status(400).json({ "message": err.message });
@@ -182,7 +187,7 @@ app.post("/predict", async (req, res) => {
 
     if (urlType === "video") {
         [err, downloadStatus] = await to.default(
-            downloadPartFile(url, IMG_DOWNLOAD_PATH + filename + "_" + "video", MAX_VIDEO_SIZE_MB * 1024 * 1024, REQUEST_TIMEOUT_IN_SECONDS * 1000)
+            downloadPartFile(url, IMG_DOWNLOAD_PATH + filename + "_" + "video", MAX_VIDEO_SIZE_MB * 1024 * 1024, REQUEST_TIMEOUT_IN_SECONDS * 1000, extraHeaders)
         );
         if (err) {
             // Cleanup all image file                                             
@@ -207,7 +212,7 @@ app.post("/predict", async (req, res) => {
     }
     else {
         [err, downloadStatus] = await to.default(
-            downloadFile(url, IMG_DOWNLOAD_PATH + filename + "_" + "image", REQUEST_TIMEOUT_IN_SECONDS * 1000)
+            downloadFile(url, IMG_DOWNLOAD_PATH + filename + "_" + "image", REQUEST_TIMEOUT_IN_SECONDS * 1000, extraHeaders)
         );
         if (err) {
             // Cleanup all image file                                             
