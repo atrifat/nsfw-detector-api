@@ -80,6 +80,22 @@ The output is JSON which consists of four predicted classes (based on [NsfwSpy.j
 }
 ```
 
+## Configuration
+
+The following environment variables can be used to configure the API server:
+
+*   `PORT`: The port the server listens on (default: 8081).
+*   `API_TOKEN`: The API token for authentication (default: myapitokenchangethislater).
+*   `ENABLE_API_TOKEN`: Enable or disable API token authentication (default: false).
+*   `ENABLE_CONTENT_TYPE_CHECK`: Ensure content type check via header request (default: false).
+*   `FFMPEG_PATH`: Set to other path for ffmpeg installed in system (example: /usr/bin/ffmpeg) otherwise automatically inferred from ffmpeg.path pre-installed dependency
+*   `IMG_DOWNLOAD_PATH`: Directory to store temporary files (default: /tmp/).
+*   `MAX_VIDEO_SIZE_MB`: Maximum size of video for classification in MB (default: 100).
+*   `CACHE_DURATION_IN_SECONDS`: Duration of classification cache in seconds (default: 86400).
+*   `MAX_CACHE_ITEM_NUM`: Maximum number of items in classification cache (default: 200000).
+*   `REQUEST_TIMEOUT_IN_SECONDS`: Request timeout for downloading image or checking image header in seconds (default: 60).
+*   `USER_AGENT`: User agent for downloading files (default: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36').
+
 ## License
 
 MIT
