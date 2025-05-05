@@ -19,7 +19,6 @@ env:
 jobs:
   docker:
     runs-on: ubuntu-latest
-    needs: [test, lint, format]
     permissions:
       contents: read
       packages: write
