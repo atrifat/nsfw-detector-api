@@ -1,108 +1,186 @@
-import urlRegexSafe from "url-regex-safe";
-import * as fs from "node:fs";
-import { exit } from "process";
-import { spawn } from 'node:child_process';
+import urlRegexSafe from 'url-regex-safe'
+import { to } from 'await-to-js'
+import * as fs from 'node:fs'
+import { exit } from 'process'
+import { spawn } from 'node:child_process'
 
+/**
+ * Checks if a given content type string indicates an image type.
+ * @param {string} contentType - The content type string.
+ * @returns {boolean} - True if the content type includes "image", false otherwise.
+ */
 export const isContentTypeImageType = function (contentType) {
-  return contentType.includes("image");
-};
+  return contentType.includes('image')
+}
 
+/**
+ * Checks if a given content type string indicates a video type.
+ * @param {string} contentType - The content type string.
+ * @returns {boolean} - True if the content type includes "video", false otherwise.
+ */
 export const isContentTypeVideoType = function (contentType) {
-  return contentType.includes("video");
-};
+  return contentType.includes('video')
+}
 
-// Check url type
-// Code is modified based on https://github.com/haorendashu/nostrmo/blob/main/lib/component/content/content_decoder.dart#L505
+/**
+ * Determines the type of content based on the URL extension.
+ * Code is modified based on https://github.com/haorendashu/nostrmo/blob/main/lib/component/content/content_decoder.dart#L505
+ * @param {string} path - The URL path.
+ * @returns {"image" | "video" | "link" | "unknown"} - The determined content type.
+ */
 export const getUrlType = function (path) {
-  var strs = path.split("?");
-  var index = strs[0].lastIndexOf(".");
-  if (index == -1) {
-    return "unknown";
+  const parts = path.split('?')
+  const pathWithoutParams = parts[0]
+  const lastDotIndex = pathWithoutParams.lastIndexOf('.')
+
+  if (lastDotIndex === -1) {
+    return 'unknown'
   }
 
-  path = strs[0];
-  var n = path.substring(index);
-  n = n.toLowerCase();
+  const extension = pathWithoutParams.substring(lastDotIndex).toLowerCase()
 
-  if (n == ".png" ||
-    n == ".jpg" ||
-    n == ".jpeg" ||
-    n == ".gif" ||
-    n == ".webp") {
-    return "image";
-  } else if (n == ".mp4" || n == ".mov" || n == ".wmv" || n == ".webm" || n == ".avi" || n == ".mkv") {
-    return "video";
+  if (['.png', '.jpg', '.jpeg', '.gif', '.webp'].includes(extension)) {
+    return 'image'
+  } else if (
+    ['.mp4', '.mov', '.wmv', '.webm', '.avi', '.mkv'].includes(extension)
+  ) {
+    return 'video'
   } else {
-    return "link";
+    return 'link'
   }
 }
 
+/**
+ * Extracts URLs from a given text string.
+ * @param {string} text - The input text.
+ * @returns {string[] | null} - An array of extracted URLs or null if none are found.
+ */
 export const extractUrl = function (text) {
   const matches = text.match(
     urlRegexSafe({ strict: true, localhost: false, returnString: false })
-  );
+  )
 
-  return matches;
-};
+  return matches
+}
 
+/**
+ * Cleans a URL by removing query parameters.
+ * @param {string} url - The input URL.
+ * @returns {string} - The URL without query parameters.
+ */
 export const cleanUrlWithoutParam = function (url) {
-  const newUrl = new URL(url);
-  newUrl.search = "";
-  return newUrl.toString();
-};
+  try {
+    const newUrl = new URL(url)
+    newUrl.search = ''
+    return newUrl.toString()
+  } catch (error) {
+    console.error(`Error cleaning URL: ${error.message}`)
+    return url // Return original URL if parsing fails
+  }
+}
 
+/**
+ * Handles fatal errors by logging the error and exiting the process.
+ * @param {Error | null | undefined} err - The error to handle.
+ */
 export const handleFatalError = function (err) {
-  if (typeof err === "undefined") return;
-  if (err === null) return;
-  console.error(err);
-  // force exit
-  exit(1);
-};
+  if (err) {
+    console.error('Fatal Error:', err)
+    // force exit
+    exit(1)
+  }
+}
 
+/**
+ * Deletes a file asynchronously.
+ * @param {string} filePath - The path to the file to delete.
+ * @returns {Promise<boolean>} - A promise that resolves to true on successful deletion.
+ * @throws {Error} If the file deletion fails.
+ */
 export async function deleteFile(filePath) {
   return new Promise((resolve, reject) => {
     fs.unlink(filePath, (err) => {
-      if (err) reject(err);
-      resolve(true);
-    });
-  });
+      if (err) {
+        // Ignore file not found errors during cleanup
+        if (err.code === 'ENOENT') {
+          resolve(false) // Indicate file was not found
+        } else {
+          reject(err)
+        }
+      } else {
+        resolve(true) // Indicate successful deletion
+      }
+    })
+  })
 }
 
+/**
+ * Moves a file asynchronously.
+ * @param {string} srcPath - The source path of the file.
+ * @param {string} dstPath - The destination path for the file.
+ * @returns {Promise<boolean>} - A promise that resolves to true on successful move.
+ * @throws {Error} If the file move fails.
+ */
 export async function moveFile(srcPath, dstPath) {
   return new Promise((resolve, reject) => {
     fs.rename(srcPath, dstPath, (err) => {
-      if (err) reject(err);
-      resolve(true);
-    });
-  });
+      if (err) {
+        reject(err)
+      } else {
+        resolve(true)
+      }
+    })
+  })
 }
 
+/**
+ * Runs a command as a child process and returns its stdout.
+ * @param {string} command - The command to run.
+ * @param {string[]} args - Arguments for the command.
+ * @param {object} [options] - Options for the child process.
+ * @returns {Promise<string>} - A promise that resolves with the stdout of the command on success.
+ * @throws {Error} If the command fails or exits with a non-zero code.
+ */
 export async function runCommand(command, args, options) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, options);
+    const child = spawn(command, args, options)
 
-    let stdout = '';
-    let stderr = '';
+    let stdout = ''
+    let stderr = ''
 
     child.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
+      stdout += data.toString()
+    })
 
     child.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
+      stderr += data.toString()
+    })
 
-    child.on('close', (code, error) => {
+    child.on('close', (code) => {
       if (code === 0) {
-        resolve(stdout);
+        resolve(stdout)
       } else {
-        reject(new Error(`Command failed with code ${code}.\nStderr: ${stderr}`));
+        reject(
+          new Error(`Command failed with code ${code}.\nStderr: ${stderr}`)
+        )
       }
-    });
+    })
 
     child.on('error', (error) => {
-      reject(error);
-    });
-  });
+      reject(error)
+    })
+  })
 }
 
+/**
+ * Cleans up temporary files associated with a given filename.
+ * @param {string} filename - The base filename.
+ * @param {string} IMG_DOWNLOAD_PATH - Directory for temporary files.
+ * @returns {Promise<boolean>} - True if cleanup is attempted.
+ */
+export const cleanupTemporaryFile = async (filename, IMG_DOWNLOAD_PATH) => {
+  await to(deleteFile(IMG_DOWNLOAD_PATH + filename + '_' + 'image'))
+  await to(deleteFile(IMG_DOWNLOAD_PATH + filename + '_' + 'video'))
+  await to(deleteFile(IMG_DOWNLOAD_PATH + filename + '_' + 'final'))
+  return true
+}
