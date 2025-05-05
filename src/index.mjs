@@ -1,332 +1,160 @@
-import express from "express";
-import bodyparser from 'body-parser';
-import { NsfwSpy } from "./nsfw-detector.mjs";
-import sharp from "sharp";
-import { LRUCache } from "lru-cache";
-import to from "await-to-js";
-import { downloadFile, downloadPartFile, getContentInfo } from "./download.mjs";
-import {
-    extractUrl,
-    isContentTypeImageType,
-    isContentTypeVideoType,
-    cleanUrlWithoutParam,
-    handleFatalError,
-    deleteFile,
-    moveFile,
-    getUrlType
-} from "./util.mjs";
-import * as ffmpeg from "@ffmpeg-installer/ffmpeg";
-import { generateScreenshot } from "./ffmpeg-util.mjs";
-import { sha256 } from "js-sha256";
-import * as dotenv from 'dotenv';
-import bearerToken from 'express-bearer-token';
-import { Mutex } from 'async-mutex';
+import express from 'express'
+import bodyparser from 'body-parser'
+import { LRUCache } from 'lru-cache'
+import { cleanupTemporaryFile } from './util.mjs'
+import { predictUrlHandler, predictDataHandler } from './prediction-handler.mjs'
+import { Mutex } from 'async-mutex'
+import bearerToken from 'express-bearer-token'
+import { config } from './config.mjs'
+import { createNsfwSpy } from './nsfw-detector-factory.mjs'
+import { z } from 'zod' // Import Zod
 
-// Load env variable from .env
-dotenv.config()
+// Load NSFW detection model
+const nsfwSpy = await createNsfwSpy('file://models/mobilenet-v1.0.0/model.json')
 
-// Generic error variable
-let err;
+// Cache configuration
+const resultCache = new LRUCache({
+  max: config.MAX_CACHE_ITEM_NUM,
+  ttl: config.CACHE_DURATION_IN_SECONDS * 1000, // time to live in ms
+})
 
-// Load nsfw detection model
-const nsfwSpy = new NsfwSpy(
-    "file://models/mobilenet-v1.0.0/model.json"
-);
+const app = express()
 
-const IMG_DOWNLOAD_PATH = process.env.IMG_DOWNLOAD_PATH ?? "/tmp/";
+// Map to hold mutexes for each URL to prevent concurrent processing of the same URL
+const mutexes = new Map()
 
-console.time("load model");
-let statusLoad;
-[err, statusLoad] = await to.default(nsfwSpy.load());
-handleFatalError(err);
+// Middleware to parse JSON request bodies
+app.use(bodyparser.json({ limit: '5mb' }))
 
-console.timeEnd("load model");
+/**
+ * Middleware to log incoming requests.
+ * @param {object} req - Express request object.
+ * @param {object} _res - Express response object (unused).
+ * @param {function} next - The next middleware function.
+ */
+const requestLogger = function (req, _res, next) {
+  console.info(`${req.method} request to "${req.url}" by ${req.hostname}`)
+  next()
+}
 
-const CACHE_DURATION_IN_SECONDS = parseInt(process.env.CACHE_DURATION_IN_SECONDS || 86400);
-const MAX_CACHE_ITEM_NUM = parseInt(process.env.MAX_CACHE_ITEM_NUM || 200000);
-const resultCache = new LRUCache(
-    {
-        max: MAX_CACHE_ITEM_NUM,
-        // how long to live in ms
-        ttl: CACHE_DURATION_IN_SECONDS * 1000,
-    },
-);
+app.use(requestLogger)
 
-const PORT = process.env.PORT || 8081;
-const ENABLE_API_TOKEN = process.env.ENABLE_API_TOKEN ? process.env.ENABLE_API_TOKEN === 'true' : false;
-const API_TOKEN = process.env.API_TOKEN || "myapitokenchangethislater";
-const ENABLE_CONTENT_TYPE_CHECK = process.env.ENABLE_CONTENT_TYPE_CHECK ? process.env.ENABLE_CONTENT_TYPE_CHECK === 'true' : false;
-const FFMPEG_PATH = process.env.FFMPEG_PATH || ffmpeg.path;
-const MAX_VIDEO_SIZE_MB = parseInt(process.env.MAX_VIDEO_SIZE_MB || 100);
-const REQUEST_TIMEOUT_IN_SECONDS = parseInt(process.env.REQUEST_TIMEOUT_IN_SECONDS || 60);
-const USER_AGENT = process.env.USER_AGENT || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36';
-
-const app = express();
-
-// Map to hold mutexes for each URL
-const mutexes = new Map();
-
-// Cleanup all temporary file
-const cleanupTemporaryFile = async (filename) => {
-    let deleteResult;
-    [err, deleteResult] = await to.default(deleteFile(IMG_DOWNLOAD_PATH + filename + "_" + "image"));
-    [err, deleteResult] = await to.default(deleteFile(IMG_DOWNLOAD_PATH + filename + "_" + "video"));
-    [err, deleteResult] = await to.default(deleteFile(IMG_DOWNLOAD_PATH + filename + "_" + "final"));
-    return true;
-};
-
-app.use(bodyparser.json({ limit: '5mb' }));
-
-const reqLogger = function (req, _res, next) {
-    console.info(`${req.method} request to "${req.url}" by ${req.hostname}`);
-    next();
-};
-
-app.use(reqLogger);
-
-// Simple authentication middleware
+/**
+ * Simple authentication middleware using bearer token.
+ * Checks for the presence and validity of an API token if ENABLE_API_TOKEN is true.
+ * @param {object} req - Express request object. Expected to have a `req.token` property from `express-bearer-token`.
+ * @param {object} res - Express response object.
+ * @param {function} next - The next middleware function.
+ * @returns {object|void} - Returns a 401 JSON response if authentication fails, otherwise proceeds to the next middleware.
+ */
 const authMiddleware = function (req, res, next) {
-    if (ENABLE_API_TOKEN) {
-        const token = typeof req.token !== 'undefined' ? req.token : null;
-        if (!token) {
-            const error = new Error('Missing API token');
-            error.statusCode = 401
-            return res.status(401).json({ "message": error.message });
-        }
-
-        if (API_TOKEN !== token) {
-            const error = new Error('Invalid API token');
-            error.statusCode = 401
-            return res.status(401).json({ "message": error.message });
-        }
-    }
-    next();
-};
-
-// Extract auth token if it is exist
-app.use(bearerToken());
-
-app.use(authMiddleware);
-
-app.get("/", (req, res) => {
-    res.status(200).json({ "data": "A PoC of NSFW detector, send your post url data to /predict to get prediction result" });
-});
-
-app.post("/predict", async (req, res) => {
-    let err;
-
-    const url = (typeof req.body.url !== 'undefined') ? req.body.url : "";
-    // Check and make sure if it is valid and safe url
-    const extractedUrl = extractUrl(url);
-    if (extractedUrl === null) {
-        err = new Error("URL is not detected");
-        err.name = "ValidationError";
-        return res.status(400).json({ "message": err.message });
+  if (config.ENABLE_API_TOKEN) {
+    const token = typeof req.token !== 'undefined' ? req.token : null
+    if (!token) {
+      const error = new Error('Missing API token')
+      error.statusCode = 401
+      return res.status(401).json({ message: error.message })
     }
 
-    // Check and reject if it has multiple url
-    if (extractedUrl.length > 1) {
-        err = new Error("Multiple URL is not supported");
-        err.name = "ValidationError";
-        return res.status(400).json({ "message": err.message });
+    if (config.API_TOKEN !== token) {
+      const error = new Error('Invalid API token')
+      error.statusCode = 401
+      return res.status(401).json({ message: error.message })
     }
+  }
+  next()
+}
 
-    const extraHeaders = {
-        'User-Agent': USER_AGENT,
-    };
+// Extract bearer token from Authorization header
+app.use(bearerToken())
 
-    if (ENABLE_CONTENT_TYPE_CHECK) {
-        // Check metadata info before downloading
-        let contentInfo;
-        [err, contentInfo] = await to.default(getContentInfo(url, REQUEST_TIMEOUT_IN_SECONDS * 1000, extraHeaders));
+// Apply authentication middleware
+app.use(authMiddleware)
 
-        if (err) {
-            return res.status(400).json({ "message": err.message });
-        }
+/**
+ * Zod schema for validating the request body of the /predict endpoint.
+ * Ensures the presence and correct format of the 'url' field.
+ */
+const predictUrlSchema = z.object({
+  url: z.string().url('Invalid URL format'),
+})
 
-        // Reject non image/video type data
-        let isImageType = isContentTypeImageType(contentInfo.contentType);
-        let isVideoType = isContentTypeVideoType(contentInfo.contentType);
-        if (!(isImageType === true || isVideoType === true)) {
-            console.debug(contentInfo);
-            err = new Error("Only image/video URL is acceptable");
-            err.name = "ValidationError";
-            return res.status(400).json({ "message": err.message });
-        }
+/**
+ * Zod schema for validating the request body of the /predict_data endpoint.
+ * Ensures the presence and non-empty nature of the 'data' field.
+ */
+const predictDataSchema = z.object({
+  data: z.string().min(1, 'Data cannot be empty'),
+})
 
-        console.debug(contentInfo);
+/**
+ * Middleware factory to validate request bodies against a given Zod schema.
+ * @param {z.ZodSchema} schema - The Zod schema to validate against.
+ * @returns {function(object, object, function): object|void} - The middleware function.
+ */
+const validateRequest = (schema) => (req, res, next) => {
+  try {
+    schema.parse(req.body)
+    next()
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res
+        .status(400)
+        .json({ message: 'Validation failed', errors: error.errors })
     }
+    next(error) // Pass other errors to the next error handler
+  }
+}
 
-    const filename = sha256(url);
+/**
+ * Handles the root endpoint and returns a welcome message.
+ * @param {object} req - Express request object.
+ * @param {object} res - Express response object.
+ */
+app.get('/', (req, res) => {
+  res.status(200).json({
+    data: 'A PoC of NSFW detector, send your post url data to /predict to get prediction result',
+  })
+})
 
-    // Get or create a mutex for the specific URL represented by filename
-    let mutex = mutexes.get(filename);
-    if (!mutex) {
-        mutex = new Mutex();
-        mutexes.set(filename, mutex);
-    }
+/**
+ * Handles the /predict endpoint for URL-based NSFW detection.
+ * @param {object} req - Express request object.
+ * @param {object} res - Express response object.
+ * @param {object} dependencies - Injected dependencies.
+ */
+app.post('/predict', validateRequest(predictUrlSchema), async (req, res) => {
+  await predictUrlHandler(req, res, {
+    nsfwSpy,
+    resultCache,
+    mutexes,
+    config, // Pass the config object
+    cleanupTemporaryFile,
+    Mutex, // Pass the Mutex class itself
+  })
+})
 
-    const release = await mutex.acquire();
-    const safeReleaseMutex = () => {
-        release();
-        mutexes.delete(filename);
-    }
+/**
+ * Handles the /predict_data endpoint for base64 image data NSFW detection.
+ * @param {object} req - Express request object.
+ * @param {object} res - Express response object.
+ * @param {object} dependencies - Injected dependencies.
+ * @param {string} dependencies.IMG_DOWNLOAD_PATH - Directory for temporary files.
+ */
+app.post(
+  '/predict_data',
+  validateRequest(predictDataSchema),
+  async (req, res) => {
+    await predictDataHandler(req, res, {
+      nsfwSpy,
+      resultCache,
+      config, // Pass the config object
+      cleanupTemporaryFile, // Although not strictly needed in predictDataHandler, keeping consistent
+    })
+  }
+)
 
-    let cache = resultCache.get("url" + "-" + filename);
-    // Return cache result immediately if it is exist
-    if (cache) {
-        safeReleaseMutex();
-        return res.status(200).json({ "data": cache });
-    }
-
-    console.debug(url, "=", filename);
-
-    let downloadStatus, screenshotStatus;
-
-    let urlType = getUrlType(url);
-
-    if (urlType === "video") {
-        [err, downloadStatus] = await to.default(
-            downloadPartFile(url, IMG_DOWNLOAD_PATH + filename + "_" + "video", MAX_VIDEO_SIZE_MB * 1024 * 1024, REQUEST_TIMEOUT_IN_SECONDS * 1000, extraHeaders)
-        );
-        if (err) {
-            // Cleanup all image file                                             
-            await (cleanupTemporaryFile(filename));
-            safeReleaseMutex();
-            return res.status(500).json({ "message": err.message });
-        }
-
-        // Generate screenshot file for image classification
-        [err, screenshotStatus] = await to.default(
-            generateScreenshot(IMG_DOWNLOAD_PATH + filename + "_" + "video", IMG_DOWNLOAD_PATH + filename + ".jpg", FFMPEG_PATH)
-        );
-
-        await to.default(moveFile(IMG_DOWNLOAD_PATH + filename + ".jpg", IMG_DOWNLOAD_PATH + filename + "_" + "image"));
-
-        if (err) {
-            // Cleanup all image file                                             
-            await (cleanupTemporaryFile(filename));
-            safeReleaseMutex();
-            return res.status(500).json({ "message": err.message });
-        }
-    }
-    else {
-        [err, downloadStatus] = await to.default(
-            downloadFile(url, IMG_DOWNLOAD_PATH + filename + "_" + "image", REQUEST_TIMEOUT_IN_SECONDS * 1000, extraHeaders)
-        );
-        if (err) {
-            // Cleanup all image file                                             
-            await (cleanupTemporaryFile(filename));
-            safeReleaseMutex();
-            return res.status(500).json({ "message": err.message });
-        }
-    }
-
-    // handleFatalError(err);
-    console.debug("downloadStatus" + "-" + filename, downloadStatus);
-
-    // Load metadata for debugging
-    const img = sharp(IMG_DOWNLOAD_PATH + filename + "_" + "image");
-    let metadata;
-    [err, metadata] = await to.default(img.metadata());
-
-    if (err) {
-        // Cleanup all image file                                             
-        await (cleanupTemporaryFile(filename));
-        safeReleaseMutex();
-        return res.status(500).json({ "message": err.message });
-    }
-
-    console.time("Preprocess" + "-" + filename);
-    let outputInfo;
-    [err, outputInfo] = await to.default(
-        // Resize to 224 px since it is the input size of model
-        img.resize(224).jpeg().withMetadata().toFile(IMG_DOWNLOAD_PATH + filename + "_" + "final")
-    );
-
-    if (err) {
-        // Cleanup all image file                                             
-        await (cleanupTemporaryFile(filename));
-        safeReleaseMutex();
-        return res.status(500).json({ "message": err.message });
-    }
-    console.timeEnd("Preprocess" + "-" + filename);
-
-    console.time("Classify" + "-" + filename);
-    [err, cache] = await to.default(nsfwSpy.classifyImageFile(IMG_DOWNLOAD_PATH + filename + "_" + "final"));
-    if (err) {
-        // Cleanup all image file                                             
-        await (cleanupTemporaryFile(filename));
-        safeReleaseMutex();
-        return res.status(500).json({ "message": err.message });
-    }
-    // Set cache result
-    resultCache.set("url" + "-" + filename, cache);
-
-    console.timeEnd("Classify" + "-" + filename);
-    console.debug(cache);
-
-    // Cleanup all image file                                             
-    await (cleanupTemporaryFile(filename));
-    safeReleaseMutex();
-
-    res.status(200).json({ "data": cache });
-});
-
-app.post("/predict_data", async (req, res) => {
-    let err;
-
-    const base64_data = (typeof req.body.data !== 'undefined') ? req.body.data : null;
-
-    if (base64_data === null) {
-        err = new Error("Data input is empty, please send base64 string data as input");
-        err.name = "ValidationError";
-        return res.status(400).json({ "message": err.message });
-    }
-
-    const buffer = Buffer.from(base64_data, 'base64');
-
-    const filename = sha256(base64_data);
-    let cache = await keyv.get("data" + "-" + filename);
-    // Return cache result immediately if it is exist
-    if (cache) {
-        return res.status(200).json({ "data": cache });
-    }
-
-    // Load metadata for debugging
-    const img = sharp(buffer);
-    let metadata;
-    [err, metadata] = await to.default(img.metadata());
-
-    if (err) return res.status(500).json({ "message": err.message });
-    console.debug(metadata);
-
-    console.time("Preprocess" + "-" + filename);
-    let outputInfo;
-    [err, outputInfo] = await to.default(
-        // Resize to 224 px since it is the input size of model
-        img.resize(224).jpeg().withMetadata().toFile(IMG_DOWNLOAD_PATH + filename + "_" + "final")
-    );
-    if (err) return res.status(500).json({ "message": err.message });
-    console.timeEnd("Preprocess" + "-" + filename);
-
-    console.time("Classify" + "-" + filename);
-    [err, cache] = await to.default(nsfwSpy.classifyImageFile(IMG_DOWNLOAD_PATH + filename + "_" + "final"));
-    if (err) return res.status(500).json({ "message": err.message });
-
-    // Set cache result for 1 day
-    await keyv.set("data" + "-" + filename, cache, 24 * 60 * 60 * 1000);
-
-    console.timeEnd("Classify" + "-" + filename);
-    console.debug(cache);
-
-    // Cleanup image file
-    let deleteResult;
-    [err, deleteResult] = await to.default(deleteFile(IMG_DOWNLOAD_PATH + filename + "_" + "final"));
-
-    res.status(200).json({ "data": cache });
-});
-
-app.listen(PORT, () => {
-    console.log(`Listening on ${PORT} ...`);
-});
+// Start the Express server
+app.listen(config.PORT, () => {
+  console.log(`Listening on port ${config.PORT} ...`)
+})

@@ -6,15 +6,27 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.mjs",
-    "dev": "nodemon --delay 2 -q src/index.mjs"
+    "dev": "nodemon --delay 2 -q src/index.mjs",
+    "test": "jest",
+    "format": "prettier --write \"{src,__tests__}/**/*.mjs\"",
+    "lint": "eslint \"{src,__tests__}/**/*.mjs\"",
+    "format-check": "prettier --check \"{src,__tests__}/**/*.mjs\""
   },
   "keywords": [],
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@babel/preset-env": "^7.26.9",
+    "@eslint/js": "^9.26.0",
     "@types/express": "^4.17.17",
     "@types/node": "^20.6.0",
-    "nodemon": "^3.0.1"
+    "babel-jest": "^29.7.0",
+    "eslint": "^9.26.0",
+    "globals": "^16.0.0",
+    "jest": "^29.7.0",
+    "jest-environment-node": "^29.7.0",
+    "nodemon": "^3.0.1",
+    "prettier": "^3.5.3"
   },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
@@ -29,7 +41,33 @@
     "js-sha256": "^0.11.0",
     "lru-cache": "^11.1.0",
     "mime": "^4.0.7",
+    "p-memoize": "^7.1.1",
     "sharp": "^0.34.1",
-    "url-regex-safe": "^4.0.0"
-  }
+    "url-regex-safe": "^4.0.0",
+    "zod": "^3.24.3"
+  },
+  "jest": {
+    "testEnvironment": "jest-environment-node",
+    "transform": {
+      ".*\\.(mjs)$": "babel-jest",
+      "^.+\\.js$": "babel-jest"
+    },
+    "moduleNameMapper": {
+      "mime": "<rootDir>/__mocks__/mime.mjs"
+    },
+    "transformIgnorePatterns": [],
+    "moduleFileExtensions": [
+      "mjs",
+      "js",
+      "json",
+      "node"
+    ],
+    "testMatch": [
+      "**/__tests__/**/*.mjs",
+      "**/?(*.)+(spec|test).mjs"
+    ]
+  },
+  "transformIgnorePatterns": [
+    "/node_modules/(?!mime/).*/"
+  ]
 }
