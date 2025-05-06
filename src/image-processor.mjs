@@ -19,7 +19,6 @@ export const processImageFile = async (filePath, outputPath) => {
     )
   }
 
-  console.time('Preprocess Image File')
   // Resize to 224 px (model input size), convert to JPEG, and save
   const [processErr, outputInfo] = await to(
     img.resize(224).jpeg().withMetadata().toFile(outputPath)
@@ -30,7 +29,6 @@ export const processImageFile = async (filePath, outputPath) => {
       `Failed to process image file ${filePath}: ${processErr.message}`
     )
   }
-  console.timeEnd('Preprocess Image File')
 
   return outputInfo
 }

@@ -165,12 +165,14 @@ const processUrlForPrediction = async (
   console.debug(`Download status for ${filename}:`, downloadStatus)
 
   // Process the downloaded image file
+  console.time(`Preprocess Image File ${filename}`)
   const [errProcess] = await to(
     processImageFile(
       IMG_DOWNLOAD_PATH + filename + '_' + 'image',
       IMG_DOWNLOAD_PATH + filename + '_' + 'final'
     )
   )
+  console.timeEnd(`Preprocess Image File ${filename}`)
 
   if (errProcess) {
     await cleanupTemporaryFile(filename, IMG_DOWNLOAD_PATH)
