@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/index.mjs",
     "dev": "nodemon --delay 2 -q src/index.mjs",
-    "test": "jest",
+    "test": "NODE_OPTIONS='--experimental-vm-modules --experimental-import-meta-resolve' jest",
     "format": "prettier --write \"{src,__tests__}/**/*.mjs\"",
     "lint": "eslint \"{src,__tests__}/**/*.mjs\"",
     "format-check": "prettier --check \"{src,__tests__}/**/*.mjs\""
@@ -44,18 +44,19 @@
     "p-memoize": "^7.1.1",
     "sharp": "^0.34.1",
     "url-regex-safe": "^4.0.0",
+    "workerpool": "^9.2.0",
     "zod": "^3.24.3"
   },
   "jest": {
     "testEnvironment": "jest-environment-node",
     "transform": {
-      ".*\\.(mjs)$": "babel-jest",
-      "^.+\\.js$": "babel-jest"
+      ".*\\.(mjs)$": ["babel-jest", { "rootMode": "upward" }],
+      "^.+\\.js$": ["babel-jest", { "rootMode": "upward" }]
     },
     "moduleNameMapper": {
       "mime": "<rootDir>/__mocks__/mime.mjs"
     },
-    "transformIgnorePatterns": [],
+    "transformIgnorePatterns": ["/node_modules/(?!mime|form-data).*/"],
     "moduleFileExtensions": [
       "mjs",
       "js",
@@ -66,8 +67,5 @@
       "**/__tests__/**/*.mjs",
       "**/?(*.)+(spec|test).mjs"
     ]
-  },
-  "transformIgnorePatterns": [
-    "/node_modules/(?!mime/).*/"
-  ]
+  }
 }
