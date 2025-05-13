@@ -95,6 +95,7 @@ The following environment variables can be used to configure the API server:
 *   `MAX_CACHE_ITEM_NUM`: Maximum number of items in classification cache (default: 200000).
 *   `REQUEST_TIMEOUT_IN_SECONDS`: Request timeout for downloading image or checking image header in seconds (default: 60).
 *   `USER_AGENT`: User agent for downloading files (default: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36').
+*   `WORKER_POOL_MIN_WORKERS`: Minimum number of workers in the worker pool for NSFW detection and image processing (default: 2).
 
 ## License
 

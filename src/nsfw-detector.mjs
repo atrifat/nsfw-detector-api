@@ -1,6 +1,6 @@
 // This wrapper code is based on the original NsfwSpyJs, modified to support GPU acceleration if available.
 import * as tf from '@tensorflow/tfjs-node-gpu'
-import * as fs from 'fs'
+import * as fs from 'fs/promises'
 
 /**
  * Wrapper class for the NSFW detection model.
@@ -102,7 +102,7 @@ export class NsfwSpy {
    * @throws {Error} If the file does not exist or cannot be read.
    */
   async classifyImageFile(filePath) {
-    const imageBuffer = await fs.readFileSync(filePath)
+    const imageBuffer = await fs.readFile(filePath)
     return this.classifyImageFromByteArray(imageBuffer)
   }
 }

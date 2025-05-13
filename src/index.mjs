@@ -6,11 +6,22 @@ import { predictUrlHandler, predictDataHandler } from './prediction-handler.mjs'
 import { Mutex } from 'async-mutex'
 import bearerToken from 'express-bearer-token'
 import { config } from './config.mjs'
-import { createNsfwSpy } from './nsfw-detector-factory.mjs'
+import {
+  createNsfwDetectorWorkerPool,
+  createImageProcessingWorkerPool,
+  createNsfwSpyInstanceFromWorker,
+  createImageProcessingInstanceFromWorker,
+} from './nsfw-detector-factory.mjs'
 import { z } from 'zod' // Import Zod
 
-// Load NSFW detection model
-const nsfwSpy = await createNsfwSpy('file://models/mobilenet-v1.0.0/model.json')
+// Load NSFW detection instance from worker pool
+const nsfwDetectorWorkerPool = await createNsfwDetectorWorkerPool(config)
+const nsfwSpy = await createNsfwSpyInstanceFromWorker(nsfwDetectorWorkerPool)
+// Load image processing instance from worker pool
+const imageProcessingWorkerPool = await createImageProcessingWorkerPool(config)
+const imageProcessingInstance = await createImageProcessingInstanceFromWorker(
+  imageProcessingWorkerPool
+)
 
 // Cache configuration
 const resultCache = new LRUCache({
@@ -121,11 +132,11 @@ app.get('/', (req, res) => {
  * Handles the /predict endpoint for URL-based NSFW detection.
  * @param {object} req - Express request object.
  * @param {object} res - Express response object.
- * @param {object} dependencies - Injected dependencies.
  */
 app.post('/predict', validateRequest(predictUrlSchema), async (req, res) => {
   await predictUrlHandler(req, res, {
     nsfwSpy,
+    imageProcessingInstance,
     resultCache,
     mutexes,
     config, // Pass the config object
@@ -138,8 +149,6 @@ app.post('/predict', validateRequest(predictUrlSchema), async (req, res) => {
  * Handles the /predict_data endpoint for base64 image data NSFW detection.
  * @param {object} req - Express request object.
  * @param {object} res - Express response object.
- * @param {object} dependencies - Injected dependencies.
- * @param {string} dependencies.IMG_DOWNLOAD_PATH - Directory for temporary files.
  */
 app.post(
   '/predict_data',
@@ -147,12 +156,28 @@ app.post(
   async (req, res) => {
     await predictDataHandler(req, res, {
       nsfwSpy,
+      imageProcessingInstance,
       resultCache,
       config, // Pass the config object
       cleanupTemporaryFile, // Although not strictly needed in predictDataHandler, keeping consistent
     })
   }
 )
+
+// Graceful shutdown
+const gracefulShutdown = async () => {
+  console.log('Shutting down gracefully...')
+  await Promise.allSettled([
+    nsfwDetectorWorkerPool.terminate(false, 2000),
+    imageProcessingWorkerPool.terminate(false, 2000),
+  ])
+  console.log('NSFW detector worker pool terminated.')
+  console.log('Image processing worker pool terminated.')
+  process.exit(0)
+}
+
+process.on('SIGTERM', gracefulShutdown)
+process.on('SIGINT', gracefulShutdown) // Ctrl+C
 
 // Start the Express server
 app.listen(config.PORT, () => {
