@@ -6,9 +6,9 @@ import {
   isContentTypeVideoType,
   getUrlType,
   moveFile,
-  cleanupTemporaryFile, // Added cleanupTemporaryFile
+  cleanupTemporaryFile,
 } from './util.mjs'
-import { processImageFile, processImageData } from './image-processor.mjs'
+
 import { generateScreenshot } from './ffmpeg-util.mjs'
 import { sha256 } from 'js-sha256'
 import pMemoize from 'p-memoize'
@@ -18,7 +18,8 @@ import pMemoize from 'p-memoize'
  * Handles temporary files, video screenshots, and concurrency.
  * @param {string} url - The URL of the content.
  * @param {object} dependencies - Injected dependencies.
- * @param {object} dependencies.nsfwSpy - The NSFW detector instance.
+ * @param {import("./nsfw-detector-factory.mjs").NsfwSpyWorkerInterface} dependencies.nsfwSpy - The NSFW detector instance.
+ * @param {import("./nsfw-detector-factory.mjs").ImageProcessingWorkerInterface} dependencies.imageProcessingInstance - The image processing instance.
  * @param {object} dependencies.resultCache - The LRU cache instance.
  * @param {Map<string, import('async-mutex').Mutex>} dependencies.mutexes - Map of mutexes for concurrency control. This map stores the mutexes associated with each URL.
  * @param {object} dependencies.config - Configuration setting
@@ -34,7 +35,7 @@ import pMemoize from 'p-memoize'
  */
 const processUrlForPrediction = async (
   url,
-  { nsfwSpy, resultCache, mutexes, config, Mutex }
+  { nsfwSpy, imageProcessingInstance, resultCache, mutexes, config, Mutex }
 ) => {
   const {
     IMG_DOWNLOAD_PATH,
@@ -166,8 +167,10 @@ const processUrlForPrediction = async (
 
   // Process the downloaded image file
   console.time(`Preprocess Image File ${filename}`)
+
+  // Call the worker function via the proxy
   const [errProcess] = await to(
-    processImageFile(
+    imageProcessingInstance.processImageFile(
       IMG_DOWNLOAD_PATH + filename + '_' + 'image',
       IMG_DOWNLOAD_PATH + filename + '_' + 'final'
     )
@@ -209,7 +212,8 @@ const processUrlForPrediction = async (
  * Processes base64 image data for NSFW detection.
  * @param {string} base64_data - The base64 encoded image data.
  * @param {object} dependencies - Injected dependencies.
- * @param {object} dependencies.nsfwSpy - The NSFW detector instance.
+ * @param {import("./nsfw-detector.mjs").NsfwSpy} dependencies.nsfwSpy - The NSFW detector instance.
+ * @param {import("./nsfw-detector-factory.mjs").ImageProcessingWorkerInterface} dependencies.imageProcessingInstance - The image processing instance.
  * @param {object} dependencies.resultCache - The LRU cache instance.
  * @param {object} dependencies.config - Configuration setting
  * @param {string} dependencies.config.IMG_DOWNLOAD_PATH - Directory for temporary files.
@@ -218,7 +222,7 @@ const processUrlForPrediction = async (
  */
 const processDataForPrediction = async (
   base64_data,
-  { nsfwSpy, resultCache, config }
+  { nsfwSpy, imageProcessingInstance, resultCache, config }
 ) => {
   const buffer = Buffer.from(base64_data, 'base64')
   const filename = sha256(base64_data)
@@ -232,7 +236,10 @@ const processDataForPrediction = async (
 
   // Process the image data buffer
   const [errProcess] = await to(
-    processImageData(buffer, IMG_DOWNLOAD_PATH + filename + '_' + 'final')
+    imageProcessingInstance.processImageData(
+      buffer,
+      IMG_DOWNLOAD_PATH + filename + '_' + 'final'
+    )
   )
   if (errProcess) {
     await cleanupTemporaryFile(filename, IMG_DOWNLOAD_PATH)
