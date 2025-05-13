@@ -29,4 +29,5 @@ export const config = {
   USER_AGENT:
     process.env.USER_AGENT ||
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+  WORKER_POOL_MIN_WORKERS: parseInt(process.env.WORKER_POOL_MIN_WORKERS || 2),
 }
