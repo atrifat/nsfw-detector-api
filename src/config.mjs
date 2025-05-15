@@ -4,6 +4,9 @@ import * as dotenv from 'dotenv'
 // Load environment variables from .env file
 dotenv.config()
 
+// Parse MIN_WORKERS first as it's a fallback for MAX_WORKERS
+const minWorkers = parseInt(process.env.WORKER_POOL_MIN_WORKERS || 2)
+
 /**
  * Application configuration object.
  */
@@ -29,5 +32,9 @@ export const config = {
   USER_AGENT:
     process.env.USER_AGENT ||
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
-  WORKER_POOL_MIN_WORKERS: parseInt(process.env.WORKER_POOL_MIN_WORKERS || 2),
+  WORKER_POOL_MIN_WORKERS: minWorkers, // Use the parsed value
+  // Implement the fallback logic for MAX_WORKERS
+  WORKER_POOL_MAX_WORKERS: parseInt(
+    process.env.WORKER_POOL_MAX_WORKERS || minWorkers
+  ),
 }

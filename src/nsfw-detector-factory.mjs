@@ -50,6 +50,7 @@ export const createNsfwSpy = async (modelPath) => {
 export const createNsfwDetectorWorkerPool = async (config) => {
   const nsfwDetectorPool = workerpool.pool(nsfwDetectorWorkerScriptPath, {
     minWorkers: config.WORKER_POOL_MIN_WORKERS,
+    maxWorkers: config.WORKER_POOL_MAX_WORKERS,
   })
 
   return nsfwDetectorPool
@@ -63,6 +64,7 @@ export const createNsfwDetectorWorkerPool = async (config) => {
 export const createImageProcessingWorkerPool = async (config) => {
   const imageProcessingPool = workerpool.pool(imageProcessingWorkerScriptPath, {
     minWorkers: config.WORKER_POOL_MIN_WORKERS,
+    maxWorkers: config.WORKER_POOL_MAX_WORKERS,
   })
 
   return imageProcessingPool
