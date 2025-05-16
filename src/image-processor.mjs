@@ -45,32 +45,29 @@ export const processImageFile = async (filePath, outputPath) => {
 /**
  * Processes image data from a buffer by resizing and converting it to JPEG format.
  * @param {Buffer} buffer - The input image data buffer.
- * @param {string} outputPath - The path to save the processed output image file.
- * @returns {Promise<ImageProcessingOutputInfo>} - A promise that resolves with information about the output image.
+ * @returns {Promise<Buffer>} - A promise that resolves with the processed image buffer.
  * @throws {Error} If image data processing fails.
  */
-export const processImageData = async (buffer, outputPath) => {
+export const processImageData = async (buffer) => {
   const img = sharp(buffer)
 
   // Optional: Load metadata for debugging
-  const [metadataErr, metadata] = await to(img.metadata())
+  const [metadataErr] = await to(img.metadata())
   if (metadataErr) {
     console.warn(
       `Failed to get image metadata from buffer: ${metadataErr.message}`
     )
-  } else {
-    console.debug('Image metadata:', metadata)
   }
 
   console.time('Preprocess Image Data')
   // Resize to 224 px (model input size), convert to JPEG, and save
-  const [processErr, outputInfo] = await to(
-    img.resize(224).jpeg().withMetadata().toFile(outputPath)
+  const [processErr, processedBuffer] = await to(
+    img.resize(224).jpeg().withMetadata().toBuffer()
   )
   if (processErr) {
     throw new Error(`Failed to process image data: ${processErr.message}`)
   }
   console.timeEnd('Preprocess Image Data')
 
-  return outputInfo
+  return processedBuffer
 }

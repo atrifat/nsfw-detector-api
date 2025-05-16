@@ -8,9 +8,15 @@ async function classifyImageFile(imagePath) {
   return result
 }
 
+async function classifyImageFromByteArray(imageBuffer) {
+  const result = await nsfwSpy.classifyImageFromByteArray(imageBuffer)
+  return result
+}
+
 // Expose the classify function to the worker pool
 if (!workerpool.isMainThread) {
   workerpool.worker({
     classifyImageFile: classifyImageFile,
+    classifyImageFromByteArray: classifyImageFromByteArray,
   })
 }

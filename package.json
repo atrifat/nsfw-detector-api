@@ -50,13 +50,19 @@
   "jest": {
     "testEnvironment": "jest-environment-node",
     "transform": {
-      ".*\\.(mjs)$": ["babel-jest", { "rootMode": "upward" }],
-      "^.+\\.js$": ["babel-jest", { "rootMode": "upward" }]
+      "^.+\\.m?js$": [
+        "babel-jest",
+        {
+          "rootMode": "upward"
+        }
+      ]
     },
     "moduleNameMapper": {
       "mime": "<rootDir>/__mocks__/mime.mjs"
     },
-    "transformIgnorePatterns": ["/node_modules/(?!mime|form-data).*/"],
+    "transformIgnorePatterns": [
+      "/node_modules/(?!mime|form-data).*/"
+    ],
     "moduleFileExtensions": [
       "mjs",
       "js",
