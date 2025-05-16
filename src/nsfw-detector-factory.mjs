@@ -38,7 +38,7 @@ export const createNsfwSpy = async (modelPath) => {
  */
 
 /**
- * @typedef {object} ImageProcessorWorkerProxy
+ * @typedef {object} ImageProcessingWorkerInterface
  * @property {(filePath: string, outputPath: string) => Promise<import('sharp').OutputInfo>} processImageFile
  * @property {(buffer: Buffer, outputPath: string) => Promise<import('sharp').OutputInfo>} processImageData
  */
@@ -76,12 +76,12 @@ export const createImageProcessingWorkerPool = async (config) => {
  * @returns {Promise<NsfwSpyWorkerInterface>} - A promise that resolves with an object containing the worker interface.
  */
 export const createNsfwSpyInstanceFromWorker = async (workerpool) => {
+  const proxy = await workerpool.proxy()
   /**
    * @type {NsfwSpyWorkerInterface}
    */
   const nsfwSpyInterface = {
     classifyImageFile: async (filePath) => {
-      const proxy = await workerpool.proxy()
       return await proxy.classifyImageFile(filePath)
     },
   }
@@ -94,16 +94,15 @@ export const createNsfwSpyInstanceFromWorker = async (workerpool) => {
  * @returns {Promise<ImageProcessingWorkerInterface>} - A promise that resolves with the created image processing instance.
  */
 export const createImageProcessingInstanceFromWorker = async (workerpool) => {
+  const proxy = await workerpool.proxy()
   /**
    * @type {ImageProcessingWorkerInterface}
    */
   const imageProcessingInstance = {
     processImageFile: async (filePath, outputPath) => {
-      const proxy = await workerpool.proxy()
       return await proxy.processImageFile(filePath, outputPath)
     },
     processImageData: async (buffer, outputPath) => {
-      const proxy = await workerpool.proxy()
       return await proxy.processImageData(buffer, outputPath)
     },
   }
