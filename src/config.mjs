@@ -37,4 +37,7 @@ export const config = {
   WORKER_POOL_MAX_WORKERS: parseInt(
     process.env.WORKER_POOL_MAX_WORKERS || minWorkers
   ),
+  ENABLE_BUFFER_PROCESSING: process.env.ENABLE_BUFFER_PROCESSING
+    ? process.env.ENABLE_BUFFER_PROCESSING === 'true'
+    : false,
 }
