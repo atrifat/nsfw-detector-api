@@ -86,6 +86,38 @@ export const downloadFile = async function (
 }
 
 /**
+ * Downloads a file from a given URL to a Buffer.
+ * @param {string} src - The source URL of the file.
+ * @param {number} [timeout=60000] - The download timeout in milliseconds.
+ * @param {object} [extraHeaders={}] - Additional headers for the request.
+ * @returns {Promise<Buffer>} - A promise that resolves with the downloaded file as a Buffer.
+ * @throws {Error} If the download fails.
+ */
+export const downloadFileToBuffer = async function (
+  src,
+  timeout = 60000,
+  extraHeaders = {}
+) {
+  try {
+    const response = await axios({
+      method: 'GET',
+      url: src,
+      responseType: 'arraybuffer',
+      headers: extraHeaders,
+      timeout: timeout,
+    })
+
+    if (response?.data && response.status === 200) {
+      return Buffer.from(response.data)
+    } else {
+      throw new Error(`Failed to download file. Status: ${response.status}`)
+    }
+  } catch (e) {
+    throw new Error(`Download failed: ${e.message}`)
+  }
+}
+
+/**
  * Saves the response stream to a file, with a size limit.
  * @param {string} outputFile - The path to save the output file.
  * @param {object} response - The Axios response object with a stream data.
@@ -188,6 +220,89 @@ export const downloadPartFile = async (
       // console.log("Server returned partial content.");
       await saveOutput(outputFile, partialResponse, downloadSize)
       return true
+    } else if (partialResponse.status === 416) {
+      throw new Error('Server does not support Range header request.')
+    } else {
+      throw new Error(
+        `Failed to download partial file. Status: ${partialResponse.status}`
+      )
+    }
+  } catch (e) {
+    throw new Error(`Partial file download failed: ${e.message}`)
+  }
+}
+
+/**
+ * Downloads a part of a file from a given URL to a Buffer, with a maximum size limit.
+ * Useful for large video files where only a portion is needed.
+ * @param {string} url - The source URL of the file.
+ * @param {number} [maxVideoSize=104857600] - The maximum size to download in bytes (default: 100MB).
+ * @param {number} [timeout=60000] - The download timeout in milliseconds.
+ * @param {object} [extraHeaders={}] - Additional headers for the request.
+ * @returns {Promise<Buffer>} - A promise that resolves with the downloaded part of the file as a Buffer.
+ * @throws {Error} If the download fails or the server does not support range requests.
+ */
+export const downloadPartFileToBuffer = async (
+  url,
+  maxVideoSize = DEFAULT_MAX_VIDEO_SIZE,
+  timeout = 60000,
+  extraHeaders = {}
+) => {
+  try {
+    const redirectedUrl = await handleRedirects(url, extraHeaders, timeout)
+
+    let response = await axios.head(redirectedUrl, {
+      headers: extraHeaders,
+      timeout: timeout,
+    })
+
+    let fileSize = parseInt(response.headers['content-length'])
+    console.log(
+      `File size for ${redirectedUrl}: ${(fileSize / (1024 * 1024)).toFixed(2)} MB`
+    )
+    // Workaround for unreliable Content-Length: assume fileSize if not available or invalid
+    if (isNaN(fileSize) || fileSize <= 0) {
+      fileSize = maxVideoSize
+    }
+
+    // Download immediately if file is smaller than or equal to target maxVideoSize
+    // const downloadSize = Math.min(fileSize, maxVideoSize)
+    if (fileSize <= maxVideoSize) {
+      const getResponse = await axios.get(redirectedUrl, {
+        headers: extraHeaders,
+        responseType: 'arraybuffer',
+        timeout: timeout,
+      })
+      if (getResponse?.data && getResponse.status === 200) {
+        return Buffer.from(getResponse.data)
+      } else {
+        throw new Error(
+          `Failed to download file. Status: ${getResponse.status}`
+        )
+      }
+    }
+
+    // Set range headers to download with partial bytes size
+    const rangeHeaders = {
+      ...extraHeaders,
+      Range: `bytes=0-${maxVideoSize - 1}`,
+    }
+
+    const partialResponse = await axios.get(redirectedUrl, {
+      headers: rangeHeaders,
+      responseType: 'arraybuffer',
+      timeout: timeout,
+    })
+
+    if (partialResponse.status === 206) {
+      // console.log("Server returned partial content.");
+      if (partialResponse?.data && partialResponse.status === 206) {
+        return Buffer.from(partialResponse.data)
+      } else {
+        throw new Error(
+          `Failed to download partial file. Status: ${partialResponse.status}`
+        )
+      }
     } else if (partialResponse.status === 416) {
       throw new Error('Server does not support Range header request.')
     } else {

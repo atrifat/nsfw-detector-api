@@ -35,6 +35,7 @@ export const createNsfwSpy = async (modelPath) => {
 /**
  * @typedef {object} NsfwSpyWorkerInterface
  * @property {typeof NsfwSpy.prototype.classifyImageFile} classifyImageFile - Classifies an image from a file path using the worker.
+ * @property {typeof NsfwSpy.prototype.classifyImageFromByteArray} classifyImageFromByteArray - Classifies an image from a byte array using the worker.
  */
 
 /**
@@ -51,6 +52,7 @@ export const createNsfwDetectorWorkerPool = async (config) => {
   const nsfwDetectorPool = workerpool.pool(nsfwDetectorWorkerScriptPath, {
     minWorkers: config.WORKER_POOL_MIN_WORKERS,
     maxWorkers: config.WORKER_POOL_MAX_WORKERS,
+    workerType: 'auto',
   })
 
   return nsfwDetectorPool
@@ -65,6 +67,7 @@ export const createImageProcessingWorkerPool = async (config) => {
   const imageProcessingPool = workerpool.pool(imageProcessingWorkerScriptPath, {
     minWorkers: config.WORKER_POOL_MIN_WORKERS,
     maxWorkers: config.WORKER_POOL_MAX_WORKERS,
+    workerType: 'auto',
   })
 
   return imageProcessingPool
@@ -83,6 +86,9 @@ export const createNsfwSpyInstanceFromWorker = async (workerpool) => {
   const nsfwSpyInterface = {
     classifyImageFile: async (filePath) => {
       return await proxy.classifyImageFile(filePath)
+    },
+    classifyImageFromByteArray: async (imageBuffer) => {
+      return await proxy.classifyImageFromByteArray(imageBuffer)
     },
   }
   return nsfwSpyInterface

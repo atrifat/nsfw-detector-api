@@ -1,11 +1,18 @@
 import { to } from 'await-to-js'
-import { downloadFile, downloadPartFile, getContentInfo } from './download.mjs'
+import {
+  downloadFile,
+  downloadPartFile,
+  getContentInfo,
+  downloadFileToBuffer,
+} from './download.mjs'
+import * as fs from 'fs/promises' // Import fs.promises for readFile
 import {
   extractUrl,
   isContentTypeImageType,
   isContentTypeVideoType,
   getUrlType,
   moveFile,
+  deleteFile, // Added deleteFile import
   cleanupTemporaryFile,
 } from './util.mjs'
 
@@ -25,6 +32,7 @@ import pMemoize from 'p-memoize'
  * @param {object} dependencies.config - Configuration setting
  * @param {string} dependencies.config.IMG_DOWNLOAD_PATH - Directory for temporary files.
  * @param {boolean} dependencies.config.ENABLE_CONTENT_TYPE_CHECK - Flag to enable content type check.
+ * @param {boolean} dependencies.config.ENABLE_BUFFER_PROCESSING - Flag to enable buffer processing.
  * @param {string} dependencies.config.FFMPEG_PATH - Path to the FFmpeg binary.
  * @param {number} dependencies.config.MAX_VIDEO_SIZE_MB - Maximum video size in MB.
  * @param {number} dependencies.config.REQUEST_TIMEOUT_IN_SECONDS - Request timeout in seconds.
@@ -40,6 +48,7 @@ const processUrlForPrediction = async (
   const {
     IMG_DOWNLOAD_PATH,
     ENABLE_CONTENT_TYPE_CHECK,
+    ENABLE_BUFFER_PROCESSING, // Added feature flag
     FFMPEG_PATH,
     MAX_VIDEO_SIZE_MB,
     REQUEST_TIMEOUT_IN_SECONDS,
@@ -47,29 +56,6 @@ const processUrlForPrediction = async (
   } = config
   const extraHeaders = {
     'User-Agent': USER_AGENT,
-  }
-
-  // Optional content type check
-  if (ENABLE_CONTENT_TYPE_CHECK) {
-    let contentInfo
-    const [errContentInfo, contentInfoResult] = await to(
-      getContentInfo(url, REQUEST_TIMEOUT_IN_SECONDS * 1000, extraHeaders)
-    )
-
-    if (errContentInfo) {
-      throw new Error(`Failed to get content info: ${errContentInfo.message}`)
-    }
-    contentInfo = contentInfoResult
-
-    if (
-      !isContentTypeImageType(contentInfo.contentType) &&
-      !isContentTypeVideoType(contentInfo.contentType)
-    ) {
-      console.debug(contentInfo)
-      throw new Error('Only image/video URLs are acceptable')
-    }
-
-    console.debug(contentInfo)
   }
 
   const filename = sha256(url)
@@ -101,111 +87,218 @@ const processUrlForPrediction = async (
     return cache // Return cached result
   }
 
-  console.debug(`Processing URL: ${url}, Filename: ${filename}`)
-
+  let downloadedFile // Used in file-based path
+  let screenshotFile // Used in both paths for video
+  let imageBuffer // Used in buffer-based path
   let downloadStatus
-  const urlType = getUrlType(url)
+  let processedFile // Used in file-based path
 
-  // Download and process based on URL type
-  if (urlType === 'video') {
-    const [errDownload, downloadResult] = await to(
-      downloadPartFile(
-        url,
-        IMG_DOWNLOAD_PATH + filename + '_' + 'video',
-        MAX_VIDEO_SIZE_MB * 1024 * 1024,
-        REQUEST_TIMEOUT_IN_SECONDS * 1000,
-        extraHeaders
+  try {
+    // Optional content type check
+    if (ENABLE_CONTENT_TYPE_CHECK) {
+      let contentInfo
+      const [errContentInfo, contentInfoResult] = await to(
+        getContentInfo(url, REQUEST_TIMEOUT_IN_SECONDS * 1000, extraHeaders)
       )
-    )
-    if (errDownload) {
-      await cleanupTemporaryFile(filename, IMG_DOWNLOAD_PATH)
-      safeReleaseMutex()
-      throw new Error(`Video download failed: ${errDownload.message}`)
+
+      if (errContentInfo) {
+        throw new Error(
+          `Failed to get content info for ${url}: ${errContentInfo.message}`
+        )
+      }
+      contentInfo = contentInfoResult
+
+      if (
+        !isContentTypeImageType(contentInfo.contentType) &&
+        !isContentTypeVideoType(contentInfo.contentType)
+      ) {
+        console.debug(contentInfo)
+        throw new Error(`Only image/video URLs are acceptable for ${url}`)
+      }
+
+      console.debug(contentInfo)
     }
-    downloadStatus = downloadResult
 
-    const [errScreenshot] = await to(
-      generateScreenshot(
-        IMG_DOWNLOAD_PATH + filename + '_' + 'video',
-        IMG_DOWNLOAD_PATH + filename + '.jpg',
-        FFMPEG_PATH
+    if (ENABLE_BUFFER_PROCESSING) {
+      console.debug(
+        `Processing URL (Buffer Path): ${url}, Filename: ${filename}`
       )
-    )
+      if (getUrlType(url) === 'video') {
+        downloadedFile = IMG_DOWNLOAD_PATH + filename + '_video' // Still download video to file
+        const [errDownload, downloadResult] = await to(
+          downloadPartFile(
+            url,
+            downloadedFile,
+            MAX_VIDEO_SIZE_MB * 1024 * 1024,
+            REQUEST_TIMEOUT_IN_SECONDS * 1000,
+            extraHeaders
+          )
+        )
+        if (errDownload) {
+          throw new Error(
+            `Video download failed for ${url}: ${errDownload.message}`
+          )
+        }
+        downloadStatus = downloadResult
 
-    const [errMove] = await to(
-      moveFile(
-        IMG_DOWNLOAD_PATH + filename + '.jpg',
-        IMG_DOWNLOAD_PATH + filename + '_' + 'image'
-      )
-    )
+        screenshotFile = IMG_DOWNLOAD_PATH + filename + '.jpg' // Generate screenshot to file
+        const [errScreenshot] = await to(
+          generateScreenshot(downloadedFile, screenshotFile, FFMPEG_PATH)
+        )
+        if (errScreenshot) {
+          throw new Error(
+            `Screenshot generation failed for ${url}: ${errScreenshot.message}`
+          )
+        }
 
-    if (errScreenshot || errMove) {
-      await cleanupTemporaryFile(filename, IMG_DOWNLOAD_PATH)
-      safeReleaseMutex()
-      throw new Error(
-        `Screenshot generation or move failed: ${errScreenshot?.message || errMove?.message}`
+        const [errReadFile, screenshotBuffer] = await to(
+          fs.readFile(screenshotFile)
+        ) // Read screenshot file into buffer
+        if (errReadFile || !screenshotBuffer) {
+          throw new Error(`Could not read screenshot file for ${url}`)
+        }
+        imageBuffer = screenshotBuffer
+      } else {
+        const [errDownload, buffer] = await to(
+          downloadFileToBuffer(
+            url,
+            REQUEST_TIMEOUT_IN_SECONDS * 1000,
+            extraHeaders
+          )
+        ) // Download image directly to buffer
+        if (errDownload) {
+          throw new Error(`Download failed for ${url}: ${errDownload.message}`)
+        }
+        imageBuffer = buffer
+        downloadStatus = { status: 'downloaded to buffer' }
+      }
+
+      console.debug(`Download status for ${filename}:`, downloadStatus)
+
+      console.time(`Preprocess Image Buffer ${filename}`)
+      const [errProcess, processedBuffer] = await to(
+        imageProcessingInstance.processImageData(imageBuffer)
+      ) // Process image buffer
+      console.timeEnd(`Preprocess Image Buffer ${filename}`)
+      if (errProcess) {
+        throw new Error(
+          `Image processing failed for ${url}: ${errProcess.message}`
+        )
+      }
+
+      console.time(`Classify Buffer ${filename}`)
+      const [errClassify, prediction] = await to(
+        nsfwSpy.classifyImageFromByteArray(processedBuffer)
+      ) // Classify from buffer
+      console.timeEnd(`Classify Buffer ${filename}`)
+      if (errClassify) {
+        throw new Error(
+          `Classification failed for ${url}: ${errClassify.message}`
+        )
+      }
+
+      cache = prediction
+    } else {
+      console.debug(`Processing URL (File Path): ${url}, Filename: ${filename}`)
+      if (getUrlType(url) === 'video') {
+        downloadedFile = IMG_DOWNLOAD_PATH + filename + '_video'
+        const [errDownload, downloadResult] = await to(
+          downloadPartFile(
+            url,
+            downloadedFile,
+            MAX_VIDEO_SIZE_MB * 1024 * 1024,
+            REQUEST_TIMEOUT_IN_SECONDS * 1000,
+            extraHeaders
+          )
+        )
+        if (errDownload) {
+          throw new Error(`Video download failed: ${errDownload.message}`)
+        }
+        downloadStatus = downloadResult
+
+        screenshotFile = IMG_DOWNLOAD_PATH + filename + '.jpg'
+        const [errScreenshot] = await to(
+          generateScreenshot(downloadedFile, screenshotFile, FFMPEG_PATH)
+        )
+
+        const [errMove] = await to(
+          moveFile(
+            IMG_DOWNLOAD_PATH + filename + '.jpg',
+            IMG_DOWNLOAD_PATH + filename + '_' + 'image'
+          )
+        )
+
+        if (errScreenshot || errMove) {
+          throw new Error(
+            `Screenshot generation or move failed: ${errScreenshot?.message || errMove?.message}`
+          )
+        }
+        downloadedFile = IMG_DOWNLOAD_PATH + filename + '_' + 'image' // Update downloadedFile for image processing
+      } else {
+        downloadedFile = IMG_DOWNLOAD_PATH + filename + '_' + 'image'
+        const [errDownload, downloadResult] = await to(
+          downloadFile(
+            url,
+            downloadedFile,
+            REQUEST_TIMEOUT_IN_SECONDS * 1000,
+            extraHeaders
+          )
+        )
+        if (errDownload) {
+          throw new Error(`Image download failed: ${errDownload.message}`)
+        }
+        downloadStatus = downloadResult
+      }
+
+      console.debug(`Download status for ${filename}:`, downloadStatus)
+
+      // Process the downloaded image file
+      console.time(`Preprocess Image File ${filename}`)
+
+      processedFile = IMG_DOWNLOAD_PATH + filename + '_final'
+      // Call the worker function via the proxy
+      const [errProcess] = await to(
+        imageProcessingInstance.processImageFile(downloadedFile, processedFile)
       )
+      console.timeEnd(`Preprocess Image File ${filename}`)
+
+      if (errProcess) {
+        throw new Error(`Image processing failed: ${errProcess.message}`)
+      }
+
+      // Classify the processed image
+      console.time(`Classify ${filename}`)
+      const [errClassify, classificationResult] = await to(
+        nsfwSpy.classifyImageFile(processedFile)
+      )
+      console.timeEnd(`Classify ${filename}`)
+      if (errClassify) {
+        throw new Error(`Classification failed: ${errClassify.message}`)
+      }
+      cache = classificationResult
     }
-  } else {
-    const [errDownload, downloadResult] = await to(
-      downloadFile(
-        url,
-        IMG_DOWNLOAD_PATH + filename + '_' + 'image',
-        REQUEST_TIMEOUT_IN_SECONDS * 1000,
-        extraHeaders
-      )
-    )
-    if (errDownload) {
-      await cleanupTemporaryFile(filename, IMG_DOWNLOAD_PATH)
-      safeReleaseMutex()
-      throw new Error(`Image download failed: ${errDownload.message}`)
-    }
-    downloadStatus = downloadResult
-  }
 
-  console.debug(`Download status for ${filename}:`, downloadStatus)
-
-  // Process the downloaded image file
-  console.time(`Preprocess Image File ${filename}`)
-
-  // Call the worker function via the proxy
-  const [errProcess] = await to(
-    imageProcessingInstance.processImageFile(
-      IMG_DOWNLOAD_PATH + filename + '_' + 'image',
-      IMG_DOWNLOAD_PATH + filename + '_' + 'final'
-    )
-  )
-  console.timeEnd(`Preprocess Image File ${filename}`)
-
-  if (errProcess) {
-    await cleanupTemporaryFile(filename, IMG_DOWNLOAD_PATH)
+    // Store result in cache
+    resultCache.set('url' + '-' + filename, cache)
+    console.debug('Classification result:', cache)
+    return cache // Return the classification result
+  } catch (error) {
+    console.error(error)
+    throw error // Re-throw the error to be caught by the handler
+  } finally {
     safeReleaseMutex()
-    throw new Error(`Image processing failed: ${errProcess.message}`)
+    // Cleanup temporary files based on which path was used
+    if (ENABLE_BUFFER_PROCESSING) {
+      // Only cleanup video and screenshot files if they were created
+      if (getUrlType(url) === 'video') {
+        await to(deleteFile(IMG_DOWNLOAD_PATH + filename + '_video'))
+        await to(deleteFile(IMG_DOWNLOAD_PATH + filename + '.jpg'))
+      }
+    } else {
+      // Cleanup all temporary files for the file-based path
+      await cleanupTemporaryFile(filename, IMG_DOWNLOAD_PATH)
+    }
   }
-
-  // Classify the processed image
-  console.time(`Classify ${filename}`)
-  const [errClassify, classificationResult] = await to(
-    nsfwSpy.classifyImageFile(IMG_DOWNLOAD_PATH + filename + '_' + 'final')
-  )
-  if (errClassify) {
-    await cleanupTemporaryFile(filename, IMG_DOWNLOAD_PATH)
-    safeReleaseMutex()
-    throw new Error(`Classification failed: ${errClassify.message}`)
-  }
-  cache = classificationResult
-
-  // Store result in cache
-  resultCache.set('url' + '-' + filename, cache)
-
-  console.timeEnd(`Classify ${filename}`)
-  console.debug('Classification result:', cache)
-
-  // Cleanup temporary files
-  await cleanupTemporaryFile(filename, IMG_DOWNLOAD_PATH)
-  safeReleaseMutex()
-
-  return cache // Return the classification result
 }
 
 /**
@@ -217,6 +310,7 @@ const processUrlForPrediction = async (
  * @param {object} dependencies.resultCache - The LRU cache instance.
  * @param {object} dependencies.config - Configuration setting
  * @param {string} dependencies.config.IMG_DOWNLOAD_PATH - Directory for temporary files.
+ * @param {boolean} dependencies.config.ENABLE_BUFFER_PROCESSING - Flag to enable buffer processing.
  * @returns {Promise<object>} - The classification result.
  * @throws {Error} If any step in the process fails.
  */
@@ -226,7 +320,7 @@ const processDataForPrediction = async (
 ) => {
   const buffer = Buffer.from(base64_data, 'base64')
   const filename = sha256(base64_data)
-  const { IMG_DOWNLOAD_PATH } = config
+  const { IMG_DOWNLOAD_PATH, ENABLE_BUFFER_PROCESSING } = config
 
   // Check cache first
   let cache = resultCache.get('data' + '-' + filename)
@@ -234,39 +328,75 @@ const processDataForPrediction = async (
     return cache // Return cached result
   }
 
-  // Process the image data buffer
-  const [errProcess] = await to(
-    imageProcessingInstance.processImageData(
-      buffer,
-      IMG_DOWNLOAD_PATH + filename + '_' + 'final'
-    )
-  )
-  if (errProcess) {
-    await cleanupTemporaryFile(filename, IMG_DOWNLOAD_PATH)
-    throw new Error(`Image data processing failed: ${errProcess.message}`)
+  let imageFile, processedFile // Used in file-based path
+
+  try {
+    let processedBuffer // Used in buffer-based path
+    if (ENABLE_BUFFER_PROCESSING) {
+      console.debug(`Processing Data (Buffer Path): Filename: ${filename}`)
+      console.time(`Preprocess Image Buffer ${filename}`)
+      const [errProcess, processedBufferResult] = await to(
+        imageProcessingInstance.processImageData(buffer)
+      ) // Process buffer
+      console.timeEnd(`Preprocess Image Buffer ${filename}`)
+      if (errProcess) {
+        throw new Error(`Image data processing failed: ${errProcess.message}`)
+      }
+      processedBuffer = processedBufferResult
+
+      console.time(`Classify Buffer ${filename}`)
+      const [errClassify, prediction] = await to(
+        nsfwSpy.classifyImageFromByteArray(processedBuffer)
+      ) // Classify from buffer
+      console.timeEnd(`Classify Buffer ${filename}`)
+      if (errClassify) {
+        throw new Error(`Classification failed: ${errClassify.message}`)
+      }
+      cache = prediction
+    } else {
+      console.debug(`Processing Data (File Path): Filename: ${filename}`)
+      imageFile = IMG_DOWNLOAD_PATH + filename + '_image'
+      processedFile = IMG_DOWNLOAD_PATH + filename + '_final'
+
+      // Save the buffer to a temporary file
+      const [errWriteFile] = await to(fs.writeFile(imageFile, buffer))
+      if (errWriteFile) {
+        throw new Error(`Failed to write image file: ${errWriteFile.message}`)
+      }
+
+      console.time(`Preprocess Image File ${filename}`)
+      const [errProcess] = await to(
+        imageProcessingInstance.processImageFile(imageFile, processedFile)
+      ) // Process file
+      console.timeEnd(`Preprocess Image File ${filename}`)
+      if (errProcess) {
+        throw new Error(`Image data processing failed: ${errProcess.message}`)
+      }
+
+      console.time(`Classify ${filename}`)
+      const [errClassify, classificationResult] = await to(
+        nsfwSpy.classifyImageFile(processedFile) // Classify from file
+      )
+      console.timeEnd(`Classify ${filename}`)
+      if (errClassify) {
+        throw new Error(`Classification failed: ${errClassify.message}`)
+      }
+      cache = classificationResult
+    }
+
+    // Store result in cache
+    resultCache.set('data' + '-' + filename, cache)
+    console.debug('Classification result:', cache)
+    return cache // Return the classification result
+  } catch (error) {
+    console.error(error)
+    throw error // Re-throw the error to be caught by the handler
+  } finally {
+    // Cleanup temporary files only for the file-based path
+    if (!ENABLE_BUFFER_PROCESSING) {
+      await cleanupTemporaryFile(filename, IMG_DOWNLOAD_PATH)
+    }
   }
-
-  // Classify the processed image
-  console.time(`Classify ${filename}`)
-  const [errClassify, classificationResult] = await to(
-    nsfwSpy.classifyImageFile(IMG_DOWNLOAD_PATH + filename + '_' + 'final')
-  )
-  if (errClassify) {
-    await cleanupTemporaryFile(filename, IMG_DOWNLOAD_PATH)
-    throw new Error(`Classification failed: ${errClassify.message}`)
-  }
-  cache = classificationResult
-
-  // Store result in cache
-  resultCache.set('data' + '-' + filename, cache)
-
-  console.timeEnd(`Classify ${filename}`)
-  console.debug('Classification result:', cache)
-
-  // Cleanup temporary file
-  await cleanupTemporaryFile(filename, IMG_DOWNLOAD_PATH)
-
-  return cache // Return the classification result
 }
 
 /**
