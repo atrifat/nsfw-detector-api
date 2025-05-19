@@ -1,6 +1,6 @@
 import urlRegexSafe from 'url-regex-safe'
 import { to } from 'await-to-js'
-import * as fs from 'node:fs'
+import * as fs from 'node:fs/promises'
 import { exit } from 'process'
 import { spawn } from 'node:child_process'
 
@@ -98,20 +98,17 @@ export const handleFatalError = function (err) {
  * @throws {Error} If the file deletion fails.
  */
 export async function deleteFile(filePath) {
-  return new Promise((resolve, reject) => {
-    fs.unlink(filePath, (err) => {
-      if (err) {
-        // Ignore file not found errors during cleanup
-        if (err.code === 'ENOENT') {
-          resolve(false) // Indicate file was not found
-        } else {
-          reject(err)
-        }
-      } else {
-        resolve(true) // Indicate successful deletion
-      }
-    })
-  })
+  try {
+    await fs.unlink(filePath)
+    return true // Indicate successful deletion
+  } catch (err) {
+    // Ignore file not found errors during cleanup
+    if (err.code === 'ENOENT') {
+      return false // Indicate file was not found
+    } else {
+      throw err
+    }
+  }
 }
 
 /**
@@ -122,15 +119,8 @@ export async function deleteFile(filePath) {
  * @throws {Error} If the file move fails.
  */
 export async function moveFile(srcPath, dstPath) {
-  return new Promise((resolve, reject) => {
-    fs.rename(srcPath, dstPath, (err) => {
-      if (err) {
-        reject(err)
-      } else {
-        resolve(true)
-      }
-    })
-  })
+  await fs.rename(srcPath, dstPath)
+  return true
 }
 
 /**
