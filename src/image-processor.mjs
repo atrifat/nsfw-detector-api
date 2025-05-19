@@ -59,7 +59,6 @@ export const processImageData = async (buffer) => {
     )
   }
 
-  console.time('Preprocess Image Data')
   // Resize to 224 px (model input size), convert to JPEG, and save
   const [processErr, processedBuffer] = await to(
     img.resize(224).jpeg().withMetadata().toBuffer()
@@ -67,7 +66,6 @@ export const processImageData = async (buffer) => {
   if (processErr) {
     throw new Error(`Failed to process image data: ${processErr.message}`)
   }
-  console.timeEnd('Preprocess Image Data')
 
   return processedBuffer
 }

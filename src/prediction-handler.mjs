@@ -334,9 +334,11 @@ const processDataForPrediction = async (
     let processedBuffer // Used in buffer-based path
     if (ENABLE_BUFFER_PROCESSING) {
       console.debug(`Processing Data (Buffer Path): Filename: ${filename}`)
+      console.time(`Preprocess Image Buffer ${filename}`)
       const [errProcess, processedBufferResult] = await to(
         imageProcessingInstance.processImageData(buffer)
       ) // Process buffer
+      console.timeEnd(`Preprocess Image Buffer ${filename}`)
       if (errProcess) {
         throw new Error(`Image data processing failed: ${errProcess.message}`)
       }
@@ -362,9 +364,11 @@ const processDataForPrediction = async (
         throw new Error(`Failed to write image file: ${errWriteFile.message}`)
       }
 
+      console.time(`Preprocess Image File ${filename}`)
       const [errProcess] = await to(
         imageProcessingInstance.processImageFile(imageFile, processedFile)
       ) // Process file
+      console.timeEnd(`Preprocess Image File ${filename}`)
       if (errProcess) {
         throw new Error(`Image data processing failed: ${errProcess.message}`)
       }
