@@ -36,16 +36,27 @@ describe('image-processor', () => {
         .catch(() => false)
       expect(fileExists).toBe(true)
     })
+    it('should throw an error if the input file is invalid', async () => {
+      const invalidFilePath = '__tests__/data/not-an-image.txt'
+      // This test assumes sharp will throw an error for a non-image file.
+      await expect(
+        processImageFile(invalidFilePath, outputPath)
+      ).rejects.toThrow()
+    })
   })
 
   describe('processImageData', () => {
     it('should process image data successfully', async () => {
       const buffer = await readFile('__tests__/data/test.jpg')
-
       const result = await processImageData(buffer)
-
+      expect(result).toBeDefined()
       expect(result).toBeInstanceOf(Buffer)
       expect(result.length).toBeGreaterThan(0)
+    })
+
+    it('should throw an error if the input buffer is invalid', async () => {
+      const invalidBuffer = Buffer.from('this is not an image')
+      await expect(processImageData(invalidBuffer)).rejects.toThrow()
     })
   })
 })

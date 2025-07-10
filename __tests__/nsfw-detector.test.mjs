@@ -40,4 +40,13 @@ describe('NsfwSpy', () => {
     expect(result.isNsfw).toBeDefined()
     expect(result.predictedLabel).toBeDefined()
   })
+  it('should throw an error if classify is called before loading the model', async () => {
+    const unloadedSpy = new NsfwSpy('file://models/mobilenet-v1.0.0/model.json')
+    const imagePath = path.join(__dirname, './data/test.jpg')
+    const imageBuffer = await fs.readFile(imagePath)
+
+    await expect(
+      unloadedSpy.classifyImageFromByteArray(imageBuffer)
+    ).rejects.toThrow('The NsfwSpy model has not been loaded yet.')
+  })
 })
