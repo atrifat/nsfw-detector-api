@@ -4,22 +4,149 @@ import {
   downloadPartFile,
   getContentInfo,
   downloadFileToBuffer,
+  downloadPartFileToBuffer,
+  getVideoStream,
 } from './download.mjs'
-import * as fs from 'fs/promises' // Import fs.promises for readFile
+import * as fs from 'fs/promises'
+import path from 'path'
+
 import {
   extractUrl,
   isContentTypeImageType,
   isContentTypeVideoType,
   getUrlType,
   moveFile,
-  deleteFile, // Added deleteFile import
+  deleteFile,
   cleanupTemporaryFile,
 } from './util.mjs'
 
-import { generateScreenshot } from './ffmpeg-util.mjs'
+import {
+  generateScreenshot,
+  generateScreenshotFromBuffer,
+  generateScreenshotFromStream,
+} from './ffmpeg-util.mjs'
 import { sha256 } from 'js-sha256'
 import pMemoize from 'p-memoize'
 
+/**
+ * Private helper to get a screenshot buffer from a video URL using a tiered fallback system.
+ * @param {string} url - The URL of the video.
+ * @param {string} filename - The SHA256 hash of the URL.
+ * @param {object} params - Contains necessary parameters and dependencies.
+ * @returns {Promise<{screenshotBuffer: Buffer, downloadStatus: object, tempFilesCreated: string[]}>}
+ */
+const _getScreenshotBufferWithFallbacks = async (url, filename, params) => {
+  const {
+    limit,
+    extraHeaders,
+    REQUEST_TIMEOUT_MS,
+    FFMPEG_PATH,
+    MAX_VIDEO_SIZE_BYTES,
+    IMG_DOWNLOAD_PATH,
+  } = params
+
+  const tempFilesCreated = []
+  let err, screenshotBuffer, videoStream, videoBuffer, success, downloadStatus
+
+  // --- TIER 1: Attempt efficient streaming (fastest path) ---
+  console.debug(`[Tier 1] Processing video via streaming for ${url}`)
+  ;[err, videoStream] = await to(
+    limit(() => getVideoStream(url, extraHeaders, REQUEST_TIMEOUT_MS))
+  )
+  if (!err) {
+    ;[err, screenshotBuffer] = await to(
+      limit(() => generateScreenshotFromStream(videoStream, FFMPEG_PATH))
+    )
+    if (!err) {
+      downloadStatus = { status: 'screenshot from stream' }
+      return [null, { screenshotBuffer, downloadStatus, tempFilesCreated }]
+    }
+  }
+  console.warn(
+    `[Tier 1 Failed] Streaming failed: ${err.message}. Falling back to size-limited buffer download.`
+  )
+
+  // --- TIER 2: Fallback to a size-limited in-memory buffer ---
+  console.debug(
+    `[Tier 2] Processing video via size-limited in-memory buffer for ${url}`
+  )
+  ;[err, videoBuffer] = await to(
+    limit(() =>
+      downloadPartFileToBuffer(
+        url,
+        MAX_VIDEO_SIZE_BYTES,
+        REQUEST_TIMEOUT_MS,
+        extraHeaders
+      )
+    )
+  )
+  if (!err) {
+    ;[err, screenshotBuffer] = await to(
+      limit(() => generateScreenshotFromBuffer(videoBuffer, FFMPEG_PATH))
+    )
+    if (!err) {
+      downloadStatus = { status: 'screenshot from partial buffer (fallback)' }
+      return [null, { screenshotBuffer, downloadStatus, tempFilesCreated }]
+    }
+  }
+  console.warn(
+    `[Tier 2 Failed] Buffer processing also failed: ${err.message}. Falling back to size-limited file download.`
+  )
+
+  // --- TIER 3: Final fallback to a size-limited temporary file (most reliable) ---
+  console.debug(
+    `[Tier 3] Processing video via size-limited temporary file for ${url}`
+  )
+  const tempVideoFile = path.join(
+    IMG_DOWNLOAD_PATH,
+    `${filename}_video_fallback`
+  )
+  const tempScreenshotFile = path.join(
+    IMG_DOWNLOAD_PATH,
+    `${filename}_screenshot_fallback.jpg`
+  )
+  tempFilesCreated.push(tempVideoFile, tempScreenshotFile)
+  ;[err] = await to(
+    limit(() =>
+      downloadPartFile(
+        url,
+        tempVideoFile,
+        MAX_VIDEO_SIZE_BYTES,
+        REQUEST_TIMEOUT_MS,
+        extraHeaders
+      )
+    )
+  )
+  if (err) {
+    const finalError = new Error(
+      `[Tier 3] Final fallback download failed: ${err.message}`
+    )
+    return [finalError, { tempFilesCreated }]
+  }
+
+  ;[err, success] = await to(
+    limit(() =>
+      generateScreenshot(tempVideoFile, tempScreenshotFile, FFMPEG_PATH)
+    )
+  )
+  if (err || !success) {
+    const finalError = new Error(
+      `[Tier 3] Final fallback screenshot generation from file failed: ${err?.message || 'Unknown error'}`
+    )
+    return [finalError, { tempFilesCreated }]
+  }
+
+  ;[err, screenshotBuffer] = await to(fs.readFile(tempScreenshotFile))
+  if (err) {
+    const finalError = new Error(
+      `[Tier 3] Final fallback screenshot read failed: ${err.message}`
+    )
+    return [finalError, { tempFilesCreated }]
+  }
+
+  downloadStatus = { status: 'screenshot from temporary file (final fallback)' }
+  return [null, { screenshotBuffer, downloadStatus, tempFilesCreated }]
+}
 /**
  * Downloads, processes, and classifies content from a URL.
  * Handles temporary files, video screenshots, and concurrency.
@@ -43,20 +170,33 @@ import pMemoize from 'p-memoize'
  */
 const processUrlForPrediction = async (
   url,
-  { nsfwSpy, imageProcessingInstance, resultCache, mutexes, config, Mutex }
+  {
+    nsfwSpy,
+    imageProcessingInstance,
+    resultCache,
+    mutexes,
+    limit,
+    config,
+    Mutex,
+  }
 ) => {
   const {
     IMG_DOWNLOAD_PATH,
     ENABLE_CONTENT_TYPE_CHECK,
-    ENABLE_BUFFER_PROCESSING, // Added feature flag
+    ENABLE_BUFFER_PROCESSING,
     FFMPEG_PATH,
     MAX_VIDEO_SIZE_MB,
     REQUEST_TIMEOUT_IN_SECONDS,
     USER_AGENT,
   } = config
+
   const extraHeaders = {
     'User-Agent': USER_AGENT,
   }
+
+  // Convert config values once for use in download functions
+  const MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024
+  const REQUEST_TIMEOUT_MS = REQUEST_TIMEOUT_IN_SECONDS * 1000
 
   const filename = sha256(url)
 
@@ -77,7 +217,6 @@ const processUrlForPrediction = async (
   const release = await mutex.acquire()
   const safeReleaseMutex = () => {
     release()
-    mutexes.delete(filename)
   }
 
   // Check cache first
@@ -92,6 +231,7 @@ const processUrlForPrediction = async (
   let imageBuffer // Used in buffer-based path
   let downloadStatus
   let processedFile // Used in file-based path
+  const tempFilesCreated = [] // Array to track temporary files for cleanup
 
   try {
     // Optional content type check
@@ -121,44 +261,39 @@ const processUrlForPrediction = async (
 
     if (ENABLE_BUFFER_PROCESSING) {
       console.debug(
-        `Processing URL (Buffer Path): ${url}, Filename: ${filename}`
+        `Processing URL (Buffer Processing Path): ${url}, Filename: ${filename}`
       )
+
       if (getUrlType(url) === 'video') {
-        downloadedFile = IMG_DOWNLOAD_PATH + filename + '_video' // Still download video to file
-        const [errDownload, downloadResult] = await to(
-          downloadPartFile(
-            url,
-            downloadedFile,
-            MAX_VIDEO_SIZE_MB * 1024 * 1024,
-            REQUEST_TIMEOUT_IN_SECONDS * 1000,
-            extraHeaders
-          )
-        )
-        if (errDownload) {
-          throw new Error(
-            `Video download failed for ${url}: ${errDownload.message}`
-          )
+        // --- Video Processing Path (in-memory download and processing) ---
+        const params = {
+          limit,
+          extraHeaders,
+          REQUEST_TIMEOUT_MS,
+          FFMPEG_PATH,
+          MAX_VIDEO_SIZE_BYTES,
+          IMG_DOWNLOAD_PATH,
         }
-        downloadStatus = downloadResult
-
-        screenshotFile = IMG_DOWNLOAD_PATH + filename + '.jpg' // Generate screenshot to file
-        const [errScreenshot] = await to(
-          generateScreenshot(downloadedFile, screenshotFile, FFMPEG_PATH)
+        const [err, result] = await _getScreenshotBufferWithFallbacks(
+          url,
+          filename,
+          params
         )
-        if (errScreenshot) {
-          throw new Error(
-            `Screenshot generation failed for ${url}: ${errScreenshot.message}`
-          )
+
+        // The helper now returns the list of created files even on error
+        if (result?.tempFilesCreated?.length) {
+          tempFilesCreated.push(...result.tempFilesCreated)
         }
 
-        const [errReadFile, screenshotBuffer] = await to(
-          fs.readFile(screenshotFile)
-        ) // Read screenshot file into buffer
-        if (errReadFile || !screenshotBuffer) {
-          throw new Error(`Could not read screenshot file for ${url}`)
+        if (err) {
+          // The helper function returns a detailed error on total failure
+          throw err
         }
-        imageBuffer = screenshotBuffer
+
+        imageBuffer = result.screenshotBuffer
+        downloadStatus = result.downloadStatus
       } else {
+        // --- Image Processing Path (in-memory download) ---
         const [errDownload, buffer] = await to(
           downloadFileToBuffer(
             url,
@@ -196,7 +331,6 @@ const processUrlForPrediction = async (
           `Classification failed for ${url}: ${errClassify.message}`
         )
       }
-
       cache = prediction
     } else {
       console.debug(`Processing URL (File Path): ${url}, Filename: ${filename}`)
@@ -287,15 +421,19 @@ const processUrlForPrediction = async (
     throw error // Re-throw the error to be caught by the handler
   } finally {
     safeReleaseMutex()
-    // Cleanup temporary files based on which path was used
-    if (ENABLE_BUFFER_PROCESSING) {
-      // Only cleanup video and screenshot files if they were created
-      if (getUrlType(url) === 'video') {
-        await to(deleteFile(IMG_DOWNLOAD_PATH + filename + '_video'))
-        await to(deleteFile(IMG_DOWNLOAD_PATH + filename + '.jpg'))
+    // Always attempt to clean up any files that were explicitly tracked for deletion.
+    // This is crucial for the Tier 3 video fallback path.
+    for (const tempFile of tempFilesCreated) {
+      const [err] = await to(deleteFile(tempFile))
+      if (err) {
+        console.warn(
+          `[Cleanup Warning] Failed to delete tracked temporary file ${tempFile}: ${err.message}`
+        )
       }
-    } else {
-      // Cleanup all temporary files for the file-based path
+    }
+
+    // Additionally, run the original cleanup for the general file-based path.
+    if (!ENABLE_BUFFER_PROCESSING) {
       await cleanupTemporaryFile(filename, IMG_DOWNLOAD_PATH)
     }
   }
@@ -333,7 +471,9 @@ const processDataForPrediction = async (
   try {
     let processedBuffer // Used in buffer-based path
     if (ENABLE_BUFFER_PROCESSING) {
-      console.debug(`Processing Data (Buffer Path): Filename: ${filename}`)
+      console.debug(
+        `Processing Data (Buffer Processing Path): Filename: ${filename}`
+      )
       console.time(`Preprocess Image Buffer ${filename}`)
       const [errProcess, processedBufferResult] = await to(
         imageProcessingInstance.processImageData(buffer)
@@ -365,21 +505,23 @@ const processDataForPrediction = async (
       }
 
       console.time(`Preprocess Image File ${filename}`)
-      const [errProcess] = await to(
+      const [errProcessFile] = await to(
         imageProcessingInstance.processImageFile(imageFile, processedFile)
       ) // Process file
       console.timeEnd(`Preprocess Image File ${filename}`)
-      if (errProcess) {
-        throw new Error(`Image data processing failed: ${errProcess.message}`)
+      if (errProcessFile) {
+        throw new Error(
+          `Image data processing failed: ${errProcessFile.message}`
+        )
       }
 
       console.time(`Classify ${filename}`)
-      const [errClassify, classificationResult] = await to(
+      const [errClassifyFile, classificationResult] = await to(
         nsfwSpy.classifyImageFile(processedFile) // Classify from file
       )
       console.timeEnd(`Classify ${filename}`)
-      if (errClassify) {
-        throw new Error(`Classification failed: ${errClassify.message}`)
+      if (errClassifyFile) {
+        throw new Error(`Classification failed: ${errClassifyFile.message}`)
       }
       cache = classificationResult
     }
@@ -442,7 +584,7 @@ export const predictUrlHandler = async (req, res, dependencies) => {
   }
 
   // Process the URL and get the prediction result
-  const [err, result] = await to(processUrl(url, dependencies))
+  const [err, result] = await to(processUrl(extractedUrl[0], dependencies))
 
   if (err) {
     // Error handling is now centralized in processUrlForPrediction, just return the error response
