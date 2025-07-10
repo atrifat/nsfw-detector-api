@@ -8,6 +8,7 @@
     "start": "node src/index.mjs",
     "dev": "nodemon --delay 2 -q src/index.mjs",
     "test": "NODE_OPTIONS='--experimental-vm-modules --experimental-import-meta-resolve' jest",
+    "test:e2e": "NODE_OPTIONS='--experimental-vm-modules --experimental-import-meta-resolve' jest --config jest.e2e.config.mjs",
     "format": "prettier --write \"{src,__tests__}/**/*.mjs\"",
     "lint": "eslint \"{src,__tests__}/**/*.mjs\"",
     "format-check": "prettier --check \"{src,__tests__}/**/*.mjs\""
@@ -73,6 +74,10 @@
     "testMatch": [
       "**/__tests__/**/*.mjs",
       "**/?(*.)+(spec|test).mjs"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/__tests__/e2e/"
     ]
   }
 }
