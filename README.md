@@ -80,23 +80,40 @@ The output is JSON which consists of four predicted classes (based on [NsfwSpy.j
 }
 ```
 
+## Testing
+
+Run unit and integration tests using the following command:
+
+```
+npm run test
+```
+
+Run end-to-end tests using the following command:
+
+```
+npm run test:e2e
+```
+
 ## Configuration
 
 The following environment variables can be used to configure the API server:
 
-*   `PORT`: The port the server listens on (default: 8081).
-*   `API_TOKEN`: The API token for authentication (default: myapitokenchangethislater).
-*   `ENABLE_API_TOKEN`: Enable or disable API token authentication (default: false).
-*   `ENABLE_CONTENT_TYPE_CHECK`: Ensure content type check via header request (default: false).
-*   `FFMPEG_PATH`: Set to other path for ffmpeg installed in system (example: /usr/bin/ffmpeg) otherwise automatically inferred from ffmpeg.path pre-installed dependency
-*   `IMG_DOWNLOAD_PATH`: Directory to store temporary files (default: /tmp/).
-*   `MAX_VIDEO_SIZE_MB`: Maximum size of video for classification in MB (default: 100).
-*   `CACHE_DURATION_IN_SECONDS`: Duration of classification cache in seconds (default: 86400).
-*   `MAX_CACHE_ITEM_NUM`: Maximum number of items in classification cache (default: 200000).
-*   `REQUEST_TIMEOUT_IN_SECONDS`: Request timeout for downloading image or checking image header in seconds (default: 60).
-*   `USER_AGENT`: User agent for downloading files (default: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36').
-*   `WORKER_POOL_MIN_WORKERS`: Minimum number of workers in the worker pool for NSFW detection and image processing (default: 2).
-*   `WORKER_POOL_MAX_WORKERS`: Maximum number of workers in the worker pool. Falls back to `WORKER_POOL_MIN_WORKERS` if not set, then to 2.
+*   `PORT`: (Optional) The port the server listens on (default: 8081).
+*   `API_TOKEN`: (Optional) The API token for authentication (default: myapitokenchangethislater).
+*   `ENABLE_API_TOKEN`: (Optional) Enable or disable API token authentication (default: false).
+*   `ENABLE_CONTENT_TYPE_CHECK`: (Optional) Ensure content type check via header request (default: false).
+*   `FFMPEG_PATH`: (Optional) Set to other path for ffmpeg installed in system (example: /usr/bin/ffmpeg) otherwise automatically inferred from ffmpeg.path pre-installed dependency
+*   `IMG_DOWNLOAD_PATH`: (Optional) Directory to store temporary files (default: /tmp/).
+*   `MAX_VIDEO_SIZE_MB`: (Optional) Maximum size of video for classification in MB (default: 100).
+*   `CACHE_DURATION_IN_SECONDS`: (Optional) Duration of classification cache in seconds (default: 86400).
+*   `MAX_CACHE_ITEM_NUM`: (Optional) Maximum number of items in classification cache (default: 200000).
+*   `REQUEST_TIMEOUT_IN_SECONDS`: (Optional) Request timeout for downloading image or checking image header in seconds (default: 60).
+*   `USER_AGENT`: (Optional) User agent for downloading files (default: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36').
+*   `WORKER_POOL_MIN_WORKERS`: (Optional) Minimum number of workers in the worker pool for NSFW detection and image processing (default: 2).
+*   `WORKER_POOL_MAX_WORKERS`: (Optional) Maximum number of workers in the worker pool. Falls back to `WORKER_POOL_MIN_WORKERS` if not set, then to 2.
+*   `VIDEO_PROCESSING_CONCURRENCY`: (Optional) Set concurrency for video processing tasks (default: 10).
+*   `MUTEX_CACHE_MAX_ITEM_NUM`: (Optional) Set maximum number of item in mutex cache (default: 5000).
+*   `MUTEX_CACHE_TTL_IN_SECONDS`: (Optional) Set duration of mutex cache in seconds (default: 600).
 
 ## License
 
