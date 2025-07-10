@@ -1,38 +1,25 @@
 import express from 'express'
 import bodyparser from 'body-parser'
-import { LRUCache } from 'lru-cache'
 import { cleanupTemporaryFile } from './util.mjs'
 import { predictUrlHandler, predictDataHandler } from './prediction-handler.mjs'
 import { Mutex } from 'async-mutex'
 import bearerToken from 'express-bearer-token'
 import { config } from './config.mjs'
 import {
-  createNsfwDetectorWorkerPool,
-  createImageProcessingWorkerPool,
-  createNsfwSpyInstanceFromWorker,
-  createImageProcessingInstanceFromWorker,
-} from './nsfw-detector-factory.mjs'
+  nsfwDetectorWorkerPool,
+  imageProcessingWorkerPool,
+  nsfwSpy,
+  imageProcessingInstance,
+  resultCache,
+  mutexes,
+} from './resources.mjs'
 import { z } from 'zod' // Import Zod
+import pLimit from 'p-limit'
 
-// Load NSFW detection instance from worker pool
-const nsfwDetectorWorkerPool = await createNsfwDetectorWorkerPool(config)
-const nsfwSpy = await createNsfwSpyInstanceFromWorker(nsfwDetectorWorkerPool)
-// Load image processing instance from worker pool
-const imageProcessingWorkerPool = await createImageProcessingWorkerPool(config)
-const imageProcessingInstance = await createImageProcessingInstanceFromWorker(
-  imageProcessingWorkerPool
-)
-
-// Cache configuration
-const resultCache = new LRUCache({
-  max: config.MAX_CACHE_ITEM_NUM,
-  ttl: config.CACHE_DURATION_IN_SECONDS * 1000, // time to live in ms
-})
+// --- Global Concurrency Limiter ---
+const limit = pLimit(config.VIDEO_PROCESSING_CONCURRENCY)
 
 const app = express()
-
-// Map to hold mutexes for each URL to prevent concurrent processing of the same URL
-const mutexes = new Map()
 
 // Middleware to parse JSON request bodies
 app.use(bodyparser.json({ limit: '5mb' }))
@@ -139,6 +126,7 @@ app.post('/predict', validateRequest(predictUrlSchema), async (req, res) => {
     imageProcessingInstance,
     resultCache,
     mutexes,
+    limit, // Pass the global limiter
     config, // Pass the config object
     cleanupTemporaryFile,
     Mutex, // Pass the Mutex class itself
