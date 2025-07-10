@@ -22,7 +22,7 @@ export const config = {
     : false,
   API_TOKEN: process.env.API_TOKEN || 'myapitokenchangethislater', // TODO: Change this default token
   ENABLE_CONTENT_TYPE_CHECK: process.env.ENABLE_CONTENT_TYPE_CHECK
-    ? process.env.ENABLE_TYPE_CHECK === 'true'
+    ? process.env.ENABLE_CONTENT_TYPE_CHECK === 'true'
     : false,
   FFMPEG_PATH: process.env.FFMPEG_PATH || ffmpeg.path,
   MAX_VIDEO_SIZE_MB: parseInt(process.env.MAX_VIDEO_SIZE_MB || 100),
