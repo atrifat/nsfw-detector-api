@@ -8,6 +8,7 @@
     "start": "node src/index.mjs",
     "dev": "nodemon --delay 2 -q src/index.mjs",
     "test": "NODE_OPTIONS='--experimental-vm-modules --experimental-import-meta-resolve' jest",
+    "test:e2e": "NODE_OPTIONS='--experimental-vm-modules --experimental-import-meta-resolve' jest --config jest.e2e.config.mjs",
     "format": "prettier --write \"{src,__tests__}/**/*.mjs\"",
     "lint": "eslint \"{src,__tests__}/**/*.mjs\"",
     "format-check": "prettier --check \"{src,__tests__}/**/*.mjs\""
@@ -41,6 +42,7 @@
     "js-sha256": "^0.11.0",
     "lru-cache": "^11.1.0",
     "mime": "^4.0.7",
+    "p-limit": "^6.2.0",
     "p-memoize": "^7.1.1",
     "sharp": "^0.34.1",
     "url-regex-safe": "^4.0.0",
@@ -61,7 +63,7 @@
       "mime": "<rootDir>/__mocks__/mime.mjs"
     },
     "transformIgnorePatterns": [
-      "/node_modules/(?!mime|form-data).*/"
+      "/node_modules/(?!mime|form-data|await-to-js|js-sha256).*/"
     ],
     "moduleFileExtensions": [
       "mjs",
@@ -72,6 +74,10 @@
     "testMatch": [
       "**/__tests__/**/*.mjs",
       "**/?(*.)+(spec|test).mjs"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/__tests__/e2e/"
     ]
   }
 }

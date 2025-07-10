@@ -169,8 +169,21 @@ export async function runCommand(command, args, options) {
  * @returns {Promise<boolean>} - True if cleanup is attempted.
  */
 export const cleanupTemporaryFile = async (filename, IMG_DOWNLOAD_PATH) => {
-  await to(deleteFile(IMG_DOWNLOAD_PATH + filename + '_' + 'image'))
-  await to(deleteFile(IMG_DOWNLOAD_PATH + filename + '_' + 'video'))
-  await to(deleteFile(IMG_DOWNLOAD_PATH + filename + '_' + 'final'))
+  const filesToDelete = [
+    IMG_DOWNLOAD_PATH + filename + '_' + 'image',
+    IMG_DOWNLOAD_PATH + filename + '_' + 'video',
+    IMG_DOWNLOAD_PATH + filename + '_' + 'final',
+  ]
+
+  for (const file of filesToDelete) {
+    const [err] = await to(deleteFile(file))
+    if (err) {
+      // Log as a warning since cleanup failure is not a critical app-breaking error,
+      // but it is important to know about.
+      console.warn(
+        `[Cleanup Warning] Failed to delete temporary file ${file}: ${err.message}`
+      )
+    }
+  }
   return true
 }

@@ -22,7 +22,7 @@ export const config = {
     : false,
   API_TOKEN: process.env.API_TOKEN || 'myapitokenchangethislater', // TODO: Change this default token
   ENABLE_CONTENT_TYPE_CHECK: process.env.ENABLE_CONTENT_TYPE_CHECK
-    ? process.env.ENABLE_TYPE_CHECK === 'true'
+    ? process.env.ENABLE_CONTENT_TYPE_CHECK === 'true'
     : false,
   FFMPEG_PATH: process.env.FFMPEG_PATH || ffmpeg.path,
   MAX_VIDEO_SIZE_MB: parseInt(process.env.MAX_VIDEO_SIZE_MB || 100),
@@ -40,4 +40,13 @@ export const config = {
   ENABLE_BUFFER_PROCESSING: process.env.ENABLE_BUFFER_PROCESSING
     ? process.env.ENABLE_BUFFER_PROCESSING === 'true'
     : false,
+  VIDEO_PROCESSING_CONCURRENCY: parseInt(
+    process.env.VIDEO_PROCESSING_CONCURRENCY || 10
+  ),
+  MUTEX_CACHE_MAX_ITEM_NUM: parseInt(
+    process.env.MUTEX_CACHE_MAX_ITEM_NUM || 5000
+  ),
+  MUTEX_CACHE_TTL_IN_SECONDS: parseInt(
+    process.env.MUTEX_CACHE_TTL_IN_SECONDS || 600
+  ),
 }
