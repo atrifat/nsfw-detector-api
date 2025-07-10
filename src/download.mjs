@@ -2,7 +2,6 @@ import * as fs from 'node:fs'
 import axios from 'axios'
 import mime from 'mime'
 
-const DEFAULT_MAX_VIDEO_SIZE = 1024 * 1024 * 100 // 100MB
 const MAX_REDIRECTS = 5
 
 /**
@@ -34,7 +33,7 @@ const handleRedirects = async (url, extraHeaders = {}, timeout = 60000) => {
     }
   }
 
-  return currentUrl
+  return { finalUrl: currentUrl, response }
 }
 
 /**
@@ -171,64 +170,56 @@ const saveOutput = async (outputFile, response, size) => {
 export const downloadPartFile = async (
   url,
   outputFile,
-  maxVideoSize = DEFAULT_MAX_VIDEO_SIZE,
+  maxVideoSize,
   timeout = 60000,
   extraHeaders = {}
 ) => {
-  try {
-    const redirectedUrl = await handleRedirects(url, extraHeaders, timeout)
+  const { finalUrl: redirectedUrl, response } = await handleRedirects(
+    url,
+    extraHeaders,
+    timeout
+  )
 
-    let response = await axios.head(redirectedUrl, {
+  let fileSize = parseInt(response.headers['content-length'])
+  // Workaround for unreliable Content-Length: assume fileSize if not available or invalid
+  if (isNaN(fileSize) || fileSize <= 0) {
+    fileSize = maxVideoSize
+  }
+
+  // Download immediately if file is smaller than or equal to target maxVideoSize
+  const downloadSize = Math.min(fileSize, maxVideoSize)
+  if (fileSize <= maxVideoSize) {
+    const getResponse = await axios.get(redirectedUrl, {
       headers: extraHeaders,
-      timeout: timeout,
-    })
-
-    let fileSize = parseInt(response.headers['content-length'])
-    console.log(
-      `File size for ${redirectedUrl}: ${(fileSize / (1024 * 1024)).toFixed(2)} MB`
-    )
-    // Workaround for unreliable Content-Length: assume fileSize if not available or invalid
-    if (isNaN(fileSize) || fileSize <= 0) {
-      fileSize = maxVideoSize
-    }
-
-    // Download immediately if file is smaller than or equal to target maxVideoSize
-    const downloadSize = Math.min(fileSize, maxVideoSize)
-    if (fileSize <= maxVideoSize) {
-      const getResponse = await axios.get(redirectedUrl, {
-        headers: extraHeaders,
-        responseType: 'stream',
-        timeout: timeout,
-      })
-      await saveOutput(outputFile, getResponse, downloadSize)
-      return true
-    }
-
-    // Set range headers to download with partial bytes size
-    const rangeHeaders = {
-      ...extraHeaders,
-      Range: `bytes=0-${maxVideoSize - 1}`,
-    }
-
-    const partialResponse = await axios.get(redirectedUrl, {
-      headers: rangeHeaders,
       responseType: 'stream',
       timeout: timeout,
     })
+    await saveOutput(outputFile, getResponse, downloadSize)
+    return true
+  }
 
-    if (partialResponse.status === 206) {
-      // console.log("Server returned partial content.");
-      await saveOutput(outputFile, partialResponse, downloadSize)
-      return true
-    } else if (partialResponse.status === 416) {
-      throw new Error('Server does not support Range header request.')
-    } else {
-      throw new Error(
-        `Failed to download partial file. Status: ${partialResponse.status}`
-      )
-    }
-  } catch (e) {
-    throw new Error(`Partial file download failed: ${e.message}`)
+  // Set range headers to download with partial bytes size
+  const rangeHeaders = {
+    ...extraHeaders,
+    Range: `bytes=0-${maxVideoSize - 1}`,
+  }
+
+  const partialResponse = await axios.get(redirectedUrl, {
+    headers: rangeHeaders,
+    responseType: 'stream',
+    timeout: timeout,
+  })
+
+  if (partialResponse.status === 206 || partialResponse.status === 200) {
+    // console.log("Server returned partial content.");
+    await saveOutput(outputFile, partialResponse, downloadSize)
+    return true
+  } else if (partialResponse.status === 416) {
+    throw new Error('Server does not support Range header request.')
+  } else {
+    throw new Error(
+      `Failed to download partial file. Status: ${partialResponse.status}`
+    )
   }
 }
 
@@ -244,74 +235,63 @@ export const downloadPartFile = async (
  */
 export const downloadPartFileToBuffer = async (
   url,
-  maxVideoSize = DEFAULT_MAX_VIDEO_SIZE,
+  maxVideoSize,
   timeout = 60000,
   extraHeaders = {}
 ) => {
-  try {
-    const redirectedUrl = await handleRedirects(url, extraHeaders, timeout)
+  const { finalUrl: redirectedUrl, response } = await handleRedirects(
+    url,
+    extraHeaders,
+    timeout
+  )
 
-    let response = await axios.head(redirectedUrl, {
+  let fileSize = parseInt(response.headers['content-length'])
+  // Workaround for unreliable Content-Length: assume fileSize if not available or invalid
+  if (isNaN(fileSize) || fileSize <= 0) {
+    fileSize = maxVideoSize
+  }
+
+  // Download immediately if file is smaller than or equal to target maxVideoSize
+  // const downloadSize = Math.min(fileSize, maxVideoSize)
+  if (fileSize <= maxVideoSize) {
+    const getResponse = await axios.get(redirectedUrl, {
       headers: extraHeaders,
-      timeout: timeout,
-    })
-
-    let fileSize = parseInt(response.headers['content-length'])
-    console.log(
-      `File size for ${redirectedUrl}: ${(fileSize / (1024 * 1024)).toFixed(2)} MB`
-    )
-    // Workaround for unreliable Content-Length: assume fileSize if not available or invalid
-    if (isNaN(fileSize) || fileSize <= 0) {
-      fileSize = maxVideoSize
-    }
-
-    // Download immediately if file is smaller than or equal to target maxVideoSize
-    // const downloadSize = Math.min(fileSize, maxVideoSize)
-    if (fileSize <= maxVideoSize) {
-      const getResponse = await axios.get(redirectedUrl, {
-        headers: extraHeaders,
-        responseType: 'arraybuffer',
-        timeout: timeout,
-      })
-      if (getResponse?.data && getResponse.status === 200) {
-        return Buffer.from(getResponse.data)
-      } else {
-        throw new Error(
-          `Failed to download file. Status: ${getResponse.status}`
-        )
-      }
-    }
-
-    // Set range headers to download with partial bytes size
-    const rangeHeaders = {
-      ...extraHeaders,
-      Range: `bytes=0-${maxVideoSize - 1}`,
-    }
-
-    const partialResponse = await axios.get(redirectedUrl, {
-      headers: rangeHeaders,
       responseType: 'arraybuffer',
       timeout: timeout,
     })
-
-    if (partialResponse.status === 206) {
-      // console.log("Server returned partial content.");
-      if (partialResponse?.data && partialResponse.status === 206) {
-        return Buffer.from(partialResponse.data)
-      } else {
-        throw new Error(
-          `Failed to download partial file. Status: ${partialResponse.status}`
-        )
-      }
-    } else if (partialResponse.status === 416) {
-      throw new Error('Server does not support Range header request.')
+    if (getResponse?.data && getResponse.status === 200) {
+      return Buffer.from(getResponse.data)
     } else {
-      throw new Error(
-        `Failed to download partial file. Status: ${partialResponse.status}`
-      )
+      throw new Error(`Failed to download file. Status: ${getResponse.status}`)
     }
-  } catch (e) {
-    throw new Error(`Partial file download failed: ${e.message}`)
+  }
+
+  // Set range headers to download with partial bytes size
+  const rangeHeaders = {
+    ...extraHeaders,
+    Range: `bytes=0-${maxVideoSize - 1}`,
+  }
+
+  const partialResponse = await axios.get(redirectedUrl, {
+    headers: rangeHeaders,
+    responseType: 'arraybuffer',
+    timeout: timeout,
+  })
+
+  if (partialResponse.status === 206 || partialResponse.status === 200) {
+    // console.log("Server returned partial content.");
+    if (partialResponse?.data) {
+      return Buffer.from(partialResponse.data)
+    }
+    throw new Error(
+      `Downloaded part successfully (status ${partialResponse.status}) but no data received.`
+    )
+  } else if (partialResponse.status === 416) {
+    throw new Error('Server does not support Range header request.')
+  } else {
+    throw new Error(
+      `Failed to download partial file. Status: ${partialResponse.status}`
+    )
   }
 }
 
@@ -328,34 +308,142 @@ export const getContentInfo = async function (
   timeout = 60000,
   extraHeaders = {}
 ) {
+  const { response } = await handleRedirects(src, extraHeaders, timeout)
+
+  if (response?.headers && response.status === 200) {
+    let contentLength = parseInt(response.headers['content-length'])
+    if (isNaN(contentLength)) {
+      contentLength = 0
+    }
+    const contentType = response.headers['content-type']
+    const extension = mime.getExtension(contentType)
+
+    const output = {
+      contentLength: contentLength,
+      contentType: contentType ?? 'application/octet-stream',
+      extension: extension ?? 'bin',
+    }
+
+    return output
+  } else {
+    throw new Error(`Failed to get content info. Status: ${response.status}`)
+  }
+}
+
+/**
+ * Fetches a video URL and returns the response body as a readable stream.
+ * Throws an error on network issues or non-successful HTTP status codes.
+ * IMPORTANT: Ensure SSRF protection is applied to the URL *before* calling this.
+ * @param {string} url - The validated video URL to fetch.
+ * @returns {Promise<ReadableStream>} - A promise resolving to the readable stream.
+ */
+export async function getVideoStream(url, extraHeaders = {}, timeout = 60000) {
+  let response
   try {
-    const response = await axios({
-      method: 'HEAD',
-      url: src,
+    response = await axios.get(url, {
+      responseType: 'stream',
       timeout: timeout,
-      headers: { ...extraHeaders },
+      headers: { 'User-Agent': extraHeaders['User-Agent'] },
+      maxRedirects: 5, // Follow redirects
     })
 
-    console.log('Response headers:', response.headers)
-    if (response?.headers && response.status === 200) {
-      let contentLength = parseInt(response.headers['content-length'])
-      if (isNaN(contentLength)) {
-        contentLength = 0
-      }
-      const contentType = response.headers['content-type']
-      const extension = mime.getExtension(contentType)
-
-      const output = {
-        contentLength: contentLength,
-        contentType: contentType ?? 'application/octet-stream',
-        extension: extension ?? 'bin',
-      }
-
-      return output
-    } else {
-      throw new Error(`Failed to get content info. Status: ${response.status}`)
+    // Axios generally throws for >= 400, but explicit check is safe
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(
+        `Failed to get video stream: HTTP status ${response.status}`
+      )
     }
-  } catch (e) {
-    throw new Error(`Get content info failed: ${e.message}`)
+
+    // CRITICAL: Check content type to ensure it's a video stream or a generic binary stream that might be a video
+    const contentType = response.headers['content-type']
+    if (
+      !contentType ||
+      (!contentType.startsWith('video/') &&
+        contentType !== 'application/octet-stream')
+    ) {
+      throw new Error(
+        `Invalid content type: Expected video or application/octet-stream, got ${contentType || 'N/A'}`
+      )
+    }
+    // Optional: Consider adding maxContentLength to axios.get options to prevent unbounded downloads
+    // maxContentLength: MAX_VIDEO_SIZE_BYTES, // Define MAX_VIDEO_SIZE_BYTES based on MAX_VIDEO_SIZE_MB
+
+    return response.data // response.data is the readable stream
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      throw new Error(
+        `Failed to get video stream: ${error.message} (Status: ${error.response?.status || 'N/A'})`
+      )
+    } else {
+      throw error // Re-throw other errors
+    }
+  } finally {
+    // Ensure the stream is always destroyed on error or non-success
+    if (response?.data && (response.status < 200 || response.status >= 300)) {
+      response.data.destroy()
+    }
+  }
+}
+
+/**
+ * Reads a readable stream completely into a single Buffer.
+ * This is the crucial step to ensure the entire file is in memory before processing.
+ * @param {import('stream').Readable} stream - The readable stream to consume.
+ * @returns {Promise<Buffer>} A promise that resolves with the full file buffer.
+ */
+export function streamToBuffer(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = []
+    stream.on('data', (chunk) => {
+      chunks.push(chunk)
+    })
+    stream.on('error', (err) => {
+      // This will catch any network errors during the download.
+      reject(err)
+    })
+    stream.on('end', () => {
+      // This event only fires when the download is 100% complete.
+      resolve(Buffer.concat(chunks))
+    })
+  })
+}
+
+/**
+ * Fetches a video URL and returns its complete content as a Buffer.
+ * This is the most robust method for handling redirects and ensuring file integrity.
+ * @param {string} url - The validated video URL to fetch.
+ * @returns {Promise<Buffer>} - A promise resolving to the complete video buffer.
+ */
+export async function getVideoBuffer(url, extraHeaders = {}, timeout = 30000) {
+  try {
+    const response = await axios.get(url, {
+      // CRITICAL CHANGE: Tell axios to download the whole file and give us a buffer.
+      responseType: 'arraybuffer',
+      timeout: timeout,
+      headers: { 'User-Agent': extraHeaders['User-Agent'] },
+      maxRedirects: 5,
+    })
+
+    // Axios with arraybuffer gives a Buffer-like object in response.data.
+    // We explicitly convert it to a Node.js Buffer for consistency.
+    const videoBuffer = Buffer.from(response.data)
+
+    // Optional but good: Check the content-length if available.
+    const expectedLength = response.headers['content-length']
+    if (expectedLength && videoBuffer.length !== parseInt(expectedLength, 10)) {
+      console.warn(
+        `Buffer size mismatch for ${url}. Expected ${expectedLength}, Got ${videoBuffer.length}`
+      )
+    }
+
+    return videoBuffer
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      throw new Error(
+        `Failed to get video buffer: ${error.message} (Status: ${error.response?.status || 'N/A'})`
+      )
+    } else {
+      throw error
+    }
   }
 }
