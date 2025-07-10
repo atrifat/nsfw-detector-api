@@ -41,6 +41,7 @@
     "js-sha256": "^0.11.0",
     "lru-cache": "^11.1.0",
     "mime": "^4.0.7",
+    "p-limit": "^6.2.0",
     "p-memoize": "^7.1.1",
     "sharp": "^0.34.1",
     "url-regex-safe": "^4.0.0",
@@ -61,7 +62,7 @@
       "mime": "<rootDir>/__mocks__/mime.mjs"
     },
     "transformIgnorePatterns": [
-      "/node_modules/(?!mime|form-data).*/"
+      "/node_modules/(?!mime|form-data|await-to-js|js-sha256).*/"
     ],
     "moduleFileExtensions": [
       "mjs",
