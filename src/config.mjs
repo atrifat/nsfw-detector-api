@@ -40,4 +40,13 @@ export const config = {
   ENABLE_BUFFER_PROCESSING: process.env.ENABLE_BUFFER_PROCESSING
     ? process.env.ENABLE_BUFFER_PROCESSING === 'true'
     : false,
+  VIDEO_PROCESSING_CONCURRENCY: parseInt(
+    process.env.VIDEO_PROCESSING_CONCURRENCY || 10
+  ),
+  MUTEX_CACHE_MAX_ITEM_NUM: parseInt(
+    process.env.MUTEX_CACHE_MAX_ITEM_NUM || 5000
+  ),
+  MUTEX_CACHE_TTL_IN_SECONDS: parseInt(
+    process.env.MUTEX_CACHE_TTL_IN_SECONDS || 600
+  ),
 }
