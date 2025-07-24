@@ -93,7 +93,8 @@ export const getScreenshotBufferWithFallbacks = async (
     IMG_DOWNLOAD_PATH,
     `${filename}_screenshot_fallback.jpg`
   )
-  tempFilesCreated.push(tempVideoFile, tempScreenshotFile)[err] = await to(
+  tempFilesCreated.push(tempVideoFile, tempScreenshotFile)
+  ;[err] = await to(
     limit(() =>
       downloadPartFile(
         url,
