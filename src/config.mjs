@@ -20,7 +20,7 @@ export const config = {
   ENABLE_API_TOKEN: process.env.ENABLE_API_TOKEN
     ? process.env.ENABLE_API_TOKEN === 'true'
     : false,
-  API_TOKEN: process.env.API_TOKEN || 'myapitokenchangethislater', // TODO: Change this default token
+  API_TOKEN: process.env.API_TOKEN,
   ENABLE_CONTENT_TYPE_CHECK: process.env.ENABLE_CONTENT_TYPE_CHECK
     ? process.env.ENABLE_CONTENT_TYPE_CHECK === 'true'
     : false,
@@ -49,4 +49,11 @@ export const config = {
   MUTEX_CACHE_TTL_IN_SECONDS: parseInt(
     process.env.MUTEX_CACHE_TTL_IN_SECONDS || 600
   ),
+}
+
+// Validate that API_TOKEN is set if authentication is enabled.
+if (config.ENABLE_API_TOKEN && !config.API_TOKEN) {
+  throw new Error(
+    'FATAL: API_TOKEN must be set in environment variables when ENABLE_API_TOKEN is true.'
+  )
 }

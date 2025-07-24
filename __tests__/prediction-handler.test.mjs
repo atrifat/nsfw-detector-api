@@ -247,7 +247,7 @@ describe('Prediction Handlers', () => {
         data: expectedClassification,
       })
       expect(dependencies.Mutex().acquire).toHaveBeenCalled()
-      // expect(mockMutexes.delete).toHaveBeenCalled() // This is no longer called with LRU cache
+      expect(mockUtil.deleteFile).toHaveBeenCalledTimes(2) // For the downloaded image file and the processed file
     })
 
     it('should successfully process a valid image URL and return classification (Buffer Path)', async () => {
@@ -311,7 +311,7 @@ describe('Prediction Handlers', () => {
         message: expect.stringContaining(workerError.message),
       })
       expect(dependencies.Mutex().acquire).toHaveBeenCalled()
-      // expect(mockMutexes.delete).toHaveBeenCalled() // This is no longer called with LRU cache
+      expect(mockUtil.deleteFile).toHaveBeenCalledTimes(2) // For the downloaded image file and the processed file
     })
 
     it('should handle errors from the worker method via proxy (Buffer Path)', async () => {
@@ -420,6 +420,7 @@ describe('Prediction Handlers', () => {
       expect(mockDownloadPartFile).not.toHaveBeenCalled()
       expect(mockGenerateScreenshot).not.toHaveBeenCalled()
       expect(mockFsPromises.readFile).not.toHaveBeenCalled()
+      expect(mockUtil.deleteFile).not.toHaveBeenCalled() // No temporary files created by url-processor
     })
 
     it('should fallback to Tier 2 (partial buffer) if Tier 1 (streaming) fails', async () => {
@@ -474,6 +475,7 @@ describe('Prediction Handlers', () => {
       expect(mockDownloadPartFile).not.toHaveBeenCalled()
       expect(mockGenerateScreenshot).not.toHaveBeenCalled()
       expect(mockFsPromises.readFile).not.toHaveBeenCalled()
+      expect(mockUtil.deleteFile).not.toHaveBeenCalled() // No temporary files created by url-processor
     })
 
     it('should fallback to Tier 3 (temporary file) if Tier 1 and Tier 2 fail', async () => {
@@ -534,7 +536,8 @@ describe('Prediction Handlers', () => {
       })
 
       // Ensure temporary files created by fallback are cleaned up
-      expect(mockUtil.deleteFile).toHaveBeenCalledTimes(2) // For video and screenshot fallback files
+      // The url-processor is responsible for cleaning up the 2 files created by the video-processor fallback
+      expect(mockUtil.deleteFile).toHaveBeenCalledTimes(2)
     })
 
     it('should throw an error if all three video processing tiers fail', async () => {
@@ -753,7 +756,7 @@ describe('Prediction Handlers', () => {
         expect(mockRes.json).toHaveBeenCalledWith({
           data: expectedClassification,
         })
-        expect(mockUtil.cleanupTemporaryFile).toHaveBeenCalled()
+        expect(mockUtil.deleteFile).toHaveBeenCalledTimes(3) // For video file, screenshot file, and processed file
       })
     })
   })
@@ -792,6 +795,7 @@ describe('Prediction Handlers', () => {
       expect(mockRes.json).toHaveBeenCalledWith({
         data: expectedClassification,
       })
+      expect(mockUtil.deleteFile).toHaveBeenCalledTimes(2) // For the initial image file and the processed file
     })
 
     it('should successfully process image data using the worker pool proxy (Buffer Path)', async () => {
@@ -847,6 +851,7 @@ describe('Prediction Handlers', () => {
       expect(mockRes.json).toHaveBeenCalledWith({
         message: expect.stringContaining(workerError.message),
       })
+      expect(mockUtil.deleteFile).toHaveBeenCalledTimes(2) // For the initial image file and the processed file
     })
 
     it('should handle errors from the data processing worker method via proxy (Buffer Path)', async () => {
@@ -892,7 +897,7 @@ describe('Prediction Handlers', () => {
       expect(mockRes.json).toHaveBeenCalledWith({
         message: `Video download failed: ${downloadError.message}`,
       })
-      expect(mockUtil.cleanupTemporaryFile).toHaveBeenCalled()
+      expect(mockUtil.deleteFile).toHaveBeenCalledTimes(0) // No files created yet
     })
 
     it('should handle screenshot generation failure', async () => {
@@ -908,7 +913,8 @@ describe('Prediction Handlers', () => {
       expect(mockRes.json).toHaveBeenCalledWith({
         message: `Screenshot generation or move failed: ${screenshotError.message}`,
       })
-      expect(mockUtil.cleanupTemporaryFile).toHaveBeenCalled()
+      // The downloaded video file should be cleaned up on screenshot failure.
+      expect(mockUtil.deleteFile).toHaveBeenCalledTimes(1)
     })
 
     it('should handle image download failure', async () => {
@@ -923,7 +929,7 @@ describe('Prediction Handlers', () => {
       expect(mockRes.json).toHaveBeenCalledWith({
         message: `Image download failed: ${downloadError.message}`,
       })
-      expect(mockUtil.cleanupTemporaryFile).toHaveBeenCalled()
+      expect(mockUtil.deleteFile).toHaveBeenCalledTimes(0) // No files created yet
     })
 
     it('should handle image processing failure', async () => {
@@ -941,7 +947,7 @@ describe('Prediction Handlers', () => {
       expect(mockRes.json).toHaveBeenCalledWith({
         message: `Image processing failed: ${processError.message}`,
       })
-      expect(mockUtil.cleanupTemporaryFile).toHaveBeenCalled()
+      expect(mockUtil.deleteFile).toHaveBeenCalledTimes(2) // The initial image file and the processed file
     })
 
     it('should handle classification failure', async () => {
@@ -958,7 +964,7 @@ describe('Prediction Handlers', () => {
       expect(mockRes.json).toHaveBeenCalledWith({
         message: `Classification failed: ${classifyError.message}`,
       })
-      expect(mockUtil.cleanupTemporaryFile).toHaveBeenCalled()
+      expect(mockUtil.deleteFile).toHaveBeenCalledTimes(2) // The initial image file and the processed file
     })
   })
 
