@@ -27,7 +27,7 @@ jobs:
         uses: lewagon/wait-on-check-action@v1.4.0
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          check-name: "Check"
+          check-name: "check"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 300
           allowed-conclusions: success
