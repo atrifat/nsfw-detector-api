@@ -1,11 +1,6 @@
 name: CI CUDA
 
 on:
-  push:
-    branches: ["main", "dev"]
-    tags: ["v*"]
-  pull_request:
-    branches: ["main"]
   workflow_run:
     workflows: ["Check"]
     types:
