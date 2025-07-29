@@ -29,7 +29,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           check-name: "check"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 300
+          wait-interval: 30
           allowed-conclusions: success
       - name: Checkout
         if: ${{ !env.ACT }}
