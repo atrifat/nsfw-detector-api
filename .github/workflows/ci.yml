@@ -1,10 +1,11 @@
 name: CI
 
 on:
-  workflow_run:
-    workflows: ["Check"]
-    types:
-      - completed
+  push:
+    branches: ["main", "dev"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["main"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -17,12 +18,19 @@ env:
 
 jobs:
   docker:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
+      - name: Wait for Check workflow to complete successfully
+        uses: lewagon/wait-on-check-action@v1.4.0
+        with:
+          ref: ${{ github.ref }}
+          check-name: "Check"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 300
+          allowed-conclusions: success
       - name: Checkout
         if: ${{ !env.ACT }}
         uses: actions/checkout@v4
