@@ -6,10 +6,10 @@ on:
     tags: ["v*"]
   pull_request:
     branches: ["main"]
-  workflow_run:
-    workflows: ["Check"]
-    types:
-      - completed
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
@@ -23,6 +23,14 @@ jobs:
       contents: read
       packages: write
     steps:
+      - name: Wait for Check workflow to complete successfully
+        uses: lewagon/wait-on-check-action@v1.4.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          check-name: "check"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 30
+          allowed-conclusions: success
       - name: Checkout
         if: ${{ !env.ACT }}
         uses: actions/checkout@v4
@@ -56,3 +64,5 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
