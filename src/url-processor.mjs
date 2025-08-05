@@ -18,6 +18,23 @@ import pMemoize from 'p-memoize'
 import { getScreenshotBufferWithFallbacks } from './video-processor.mjs'
 import { runImagePredictionPipeline } from './image-prediction-pipeline.mjs'
 
+/** * Retrieves or creates a mutex for the given filename.
+ * Uses pMemoize to ensure that the mutex is created only once per filename.
+ * This prevents multiple concurrent downloads for the same URL.
+ * @param {string} filename - The filename to associate with the mutex.
+ * @param {Map<string, import('async-mutex').Mutex>} mutexes - Map of mutexes for concurrency control.
+ * @param {import('async-mutex').Mutex} Mutex - The Mutex class from async-mutex.
+ * @returns {Promise<import('async-mutex').Mutex>} - The mutex associated with the filename.
+ */
+const getOrCreateMutex = pMemoize(async (filename, mutexes, Mutex) => {
+  if (mutexes.has(filename)) {
+    return mutexes.get(filename)
+  }
+  const newMutex = new Mutex()
+  mutexes.set(filename, newMutex)
+  return newMutex
+})
+
 /**
  * Downloads, processes, and classifies content from a URL.
  * Handles temporary files, video screenshots, and concurrency.
@@ -72,18 +89,7 @@ export const processUrlForPrediction = async (
   const filename = sha256(url)
 
   // Acquire mutex for this URL to prevent concurrent processing
-  let mutex = mutexes.get(filename)
-  if (!mutex) {
-    const createMutex = async () => {
-      const newMutex = new Mutex()
-      mutexes.set(filename, newMutex)
-      return newMutex
-    }
-
-    // Atomically get or create the mutex using p-memoize
-    const memoizedCreateMutex = pMemoize(createMutex)
-    mutex = await memoizedCreateMutex()
-  }
+  const mutex = await getOrCreateMutex(filename, mutexes, Mutex)
 
   const release = await mutex.acquire()
   const safeReleaseMutex = () => {

@@ -133,12 +133,7 @@ const mockMutex = {
 
 // Create a real map to simulate stateful behavior for mutexes
 const mutexesMap = new Map()
-const mockMutexes = {
-  get: jest.fn((key) => mutexesMap.get(key)),
-  set: jest.fn((key, value) => mutexesMap.set(key, value)),
-  delete: jest.fn((key) => mutexesMap.delete(key)),
-  clear: jest.fn(() => mutexesMap.clear()),
-}
+const mockMutexes = mutexesMap
 
 const mockConfig = {
   IMG_DOWNLOAD_PATH: '/tmp/nsfw/',
