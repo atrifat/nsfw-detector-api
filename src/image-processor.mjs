@@ -19,27 +19,30 @@ import { to } from 'await-to-js'
  */
 export const processImageFile = async (filePath, outputPath) => {
   const img = sharp(filePath)
+  try {
+    // Optional: Load metadata for debugging
+    const [metadataErr] = await to(img.metadata())
+    if (metadataErr) {
+      console.warn(
+        `Failed to get image metadata for ${filePath}: ${metadataErr.message}`
+      )
+    }
 
-  // Optional: Load metadata for debugging
-  const [metadataErr] = await to(img.metadata())
-  if (metadataErr) {
-    console.warn(
-      `Failed to get image metadata for ${filePath}: ${metadataErr.message}`
+    // Resize to 224 px (model input size), convert to JPEG, and save
+    const [processErr, outputInfo] = await to(
+      img.resize(224).jpeg().withMetadata().toFile(outputPath)
     )
+
+    if (processErr) {
+      throw new Error(
+        `Failed to process image file ${filePath}: ${processErr.message}`
+      )
+    }
+
+    return outputInfo
+  } finally {
+    img?.destroy()
   }
-
-  // Resize to 224 px (model input size), convert to JPEG, and save
-  const [processErr, outputInfo] = await to(
-    img.resize(224).jpeg().withMetadata().toFile(outputPath)
-  )
-
-  if (processErr) {
-    throw new Error(
-      `Failed to process image file ${filePath}: ${processErr.message}`
-    )
-  }
-
-  return outputInfo
 }
 
 /**
@@ -50,22 +53,25 @@ export const processImageFile = async (filePath, outputPath) => {
  */
 export const processImageData = async (buffer) => {
   const img = sharp(buffer)
+  try {
+    // Optional: Load metadata for debugging
+    const [metadataErr] = await to(img.metadata())
+    if (metadataErr) {
+      console.warn(
+        `Failed to get image metadata from buffer: ${metadataErr.message}`
+      )
+    }
 
-  // Optional: Load metadata for debugging
-  const [metadataErr] = await to(img.metadata())
-  if (metadataErr) {
-    console.warn(
-      `Failed to get image metadata from buffer: ${metadataErr.message}`
+    // Resize to 224 px (model input size), convert to JPEG, and save
+    const [processErr, processedBuffer] = await to(
+      img.resize(224).jpeg().withMetadata().toBuffer()
     )
-  }
+    if (processErr) {
+      throw new Error(`Failed to process image data: ${processErr.message}`)
+    }
 
-  // Resize to 224 px (model input size), convert to JPEG, and save
-  const [processErr, processedBuffer] = await to(
-    img.resize(224).jpeg().withMetadata().toBuffer()
-  )
-  if (processErr) {
-    throw new Error(`Failed to process image data: ${processErr.message}`)
+    return processedBuffer
+  } finally {
+    img?.destroy()
   }
-
-  return processedBuffer
 }
