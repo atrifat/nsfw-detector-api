@@ -34,7 +34,7 @@ export const generateScreenshot = async (
       outputFile, // Output file
     ]
 
-    await runCommand(ffmpegBinary, args)
+    await runCommand(ffmpegBinary, args, { timeout: 15000 }) // Set a 15-second timeout
     return true
   } catch (err) {
     console.error(`Error generating screenshot: ${err.message}`)

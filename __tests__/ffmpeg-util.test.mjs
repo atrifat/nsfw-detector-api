@@ -351,7 +351,8 @@ describe('generateScreenshot', () => {
     await generateScreenshot('/path/to/video.mp4', '/path/to/screenshot.jpg')
     expect(runCommandMock).toHaveBeenCalledWith(
       '/usr/bin/ffmpeg',
-      expect.any(Array)
+      expect.any(Array),
+      { timeout: 15000 }
     )
   })
 

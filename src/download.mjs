@@ -68,6 +68,11 @@ export const downloadFile = async function (
 
       // Return a promise and resolve when download finishes
       return new Promise((resolve, reject) => {
+        response.data.on('error', (error) => {
+          writer.close()
+          reject(error)
+        })
+
         writer.on('finish', () => {
           resolve(true)
         })
