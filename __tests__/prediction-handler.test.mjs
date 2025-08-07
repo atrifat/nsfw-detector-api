@@ -1,6 +1,11 @@
 import { jest } from '@jest/globals'
 import { Readable } from 'node:stream' // Import Readable
 
+import {
+  nsfwDetectorWorkerPool,
+  imageProcessingWorkerPool,
+} from '../src/resources.mjs'
+
 // Set up mocks before importing modules to ensure they are applied before the module under test
 // is imported. This is crucial for unstable_mockModule.
 
@@ -148,6 +153,12 @@ const mockConfig = {
   CACHE_DURATION_IN_SECONDS: 3600,
   VIDEO_PROCESSING_CONCURRENCY: 5, // Add mock value for tests
 }
+
+// // Gracefully terminate the worker pools after all tests have run
+afterAll(async () => {
+  await nsfwDetectorWorkerPool.terminate()
+  await imageProcessingWorkerPool.terminate()
+})
 
 describe('Prediction Handlers', () => {
   let mockReq
