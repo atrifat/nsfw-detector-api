@@ -65,7 +65,7 @@ export function generateScreenshotFromBuffer(
   ffmpegPath,
   options = {}
 ) {
-  const { seekTime = '00:00:01.000', timeout = 15000 } = options
+  const { seekTime = '00:00:01.000', timeout = 15000, signal } = options
   // Use robust seek args, consistent with the streaming function
   const ffmpegArgs = [
     '-hide_banner',
@@ -90,6 +90,7 @@ export function generateScreenshotFromBuffer(
   return new Promise((resolve, reject) => {
     const ffmpegProcess = spawn(ffmpegPath, ffmpegArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
+      signal,
     })
 
     const bufferStream = Readable.from(videoBuffer) // The stream comes from the complete buffer
@@ -172,7 +173,7 @@ export function generateScreenshotFromStream(
   ffmpegPath,
   options = {}
 ) {
-  const { seekTime = '00:00:01.000', timeout = 15000 } = options
+  const { seekTime = '00:00:01.000', timeout = 15000, signal } = options
 
   // Arguments are optimized for robustly seeking on a stream.
   const ffmpegArgs = [
@@ -201,6 +202,7 @@ export function generateScreenshotFromStream(
   return new Promise((resolve, reject) => {
     const ffmpegProcess = spawn(ffmpegPath, ffmpegArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
+      signal,
     })
 
     let outputBuffer = Buffer.alloc(0)

@@ -232,7 +232,12 @@ describe('Prediction Handlers', () => {
         expectedClassification
       )
 
-      await predictUrlHandler(mockReq, mockRes, dependencies)
+      await predictUrlHandler(
+        mockReq,
+        mockRes,
+        dependencies,
+        new AbortController().signal
+      )
 
       expect(mockResultCache.get).toHaveBeenCalledWith(
         expect.stringContaining('url-')
@@ -272,7 +277,12 @@ describe('Prediction Handlers', () => {
         expectedClassification
       )
 
-      await predictUrlHandler(mockReq, mockRes, dependencies)
+      await predictUrlHandler(
+        mockReq,
+        mockRes,
+        dependencies,
+        new AbortController().signal
+      )
 
       expect(mockResultCache.get).toHaveBeenCalledWith(
         expect.stringContaining('url-')
@@ -308,7 +318,12 @@ describe('Prediction Handlers', () => {
         workerError
       )
 
-      await predictUrlHandler(mockReq, mockRes, dependencies)
+      await predictUrlHandler(
+        mockReq,
+        mockRes,
+        dependencies,
+        new AbortController().signal
+      )
 
       expect(mockImageProcessingInstance.processImageFile).toHaveBeenCalled()
       expect(mockNsfwSpy.classifyImageFile).not.toHaveBeenCalled()
@@ -333,7 +348,12 @@ describe('Prediction Handlers', () => {
         workerError
       )
 
-      await predictUrlHandler(mockReq, mockRes, dependencies)
+      await predictUrlHandler(
+        mockReq,
+        mockRes,
+        dependencies,
+        new AbortController().signal
+      )
 
       expect(mockImageProcessingInstance.processImageData).toHaveBeenCalled()
       expect(mockNsfwSpy.classifyImageFromByteArray).not.toHaveBeenCalled()
@@ -352,7 +372,12 @@ describe('Prediction Handlers', () => {
 
       mockResultCache.get.mockReturnValue(cachedResult)
 
-      await predictUrlHandler(mockReq, mockRes, dependencies)
+      await predictUrlHandler(
+        mockReq,
+        mockRes,
+        dependencies,
+        new AbortController().signal
+      )
 
       expect(mockResultCache.get).toHaveBeenCalledWith(
         expect.stringContaining('url-')
@@ -397,16 +422,23 @@ describe('Prediction Handlers', () => {
         expectedClassificationVideo
       )
 
-      await predictUrlHandler(mockReq, mockRes, dependencies)
+      await predictUrlHandler(
+        mockReq,
+        mockRes,
+        dependencies,
+        new AbortController().signal
+      )
 
       expect(mockGetVideoStream).toHaveBeenCalledWith(
         mockVideoUrl,
         expect.any(Object),
-        expect.any(Number)
+        expect.any(Number),
+        expect.any(Object)
       )
       expect(mockGenerateScreenshotFromStream).toHaveBeenCalledWith(
         mockVideoStream,
-        dependencies.config.FFMPEG_PATH
+        dependencies.config.FFMPEG_PATH,
+        expect.any(Object) // Match the options object
       )
       expect(mockImageProcessingInstance.processImageData).toHaveBeenCalledWith(
         expect.any(Buffer)
@@ -453,18 +485,25 @@ describe('Prediction Handlers', () => {
         expectedClassificationVideo
       )
 
-      await predictUrlHandler(mockReq, mockRes, dependencies)
+      await predictUrlHandler(
+        mockReq,
+        mockRes,
+        dependencies,
+        new AbortController().signal
+      )
 
       expect(mockGetVideoStream).toHaveBeenCalledTimes(1) // Attempted once
       expect(mockDownloadPartFileToBuffer).toHaveBeenCalledWith(
         mockVideoUrl,
         expect.any(Number),
         expect.any(Number),
+        expect.any(Object),
         expect.any(Object)
       )
       expect(mockGenerateScreenshotFromBuffer).toHaveBeenCalledWith(
         expect.any(Buffer),
-        dependencies.config.FFMPEG_PATH
+        dependencies.config.FFMPEG_PATH,
+        expect.any(Object) // Match the options object
       )
       expect(mockImageProcessingInstance.processImageData).toHaveBeenCalledWith(
         expect.any(Buffer)
@@ -511,7 +550,12 @@ describe('Prediction Handlers', () => {
         expectedClassificationVideo
       )
 
-      await predictUrlHandler(mockReq, mockRes, dependencies)
+      await predictUrlHandler(
+        mockReq,
+        mockRes,
+        dependencies,
+        new AbortController().signal
+      )
 
       expect(mockGetVideoStream).toHaveBeenCalledTimes(1)
       expect(mockDownloadPartFileToBuffer).toHaveBeenCalledTimes(1)
@@ -520,6 +564,7 @@ describe('Prediction Handlers', () => {
         expect.stringContaining(dependencies.config.IMG_DOWNLOAD_PATH),
         expect.any(Number),
         expect.any(Number),
+        expect.any(Object),
         expect.any(Object)
       )
       expect(mockGenerateScreenshot).toHaveBeenCalledWith(
@@ -563,7 +608,12 @@ describe('Prediction Handlers', () => {
       ) // Simulate final download failure
       mockGenerateScreenshot.mockResolvedValueOnce(false) // Simulate screenshot generation failure for file path
 
-      await predictUrlHandler(mockReq, mockRes, dependencies)
+      await predictUrlHandler(
+        mockReq,
+        mockRes,
+        dependencies,
+        new AbortController().signal
+      )
 
       expect(mockGetVideoStream).toHaveBeenCalledTimes(1)
       expect(mockDownloadPartFileToBuffer).toHaveBeenCalledTimes(1)
@@ -621,7 +671,12 @@ describe('Prediction Handlers', () => {
       // and ensure the underlying functions are called as expected.
       // A more advanced test would involve mocking `p-limit` to verify its `add` method is called.
 
-      await predictUrlHandler(mockReq, mockRes, dependencies)
+      await predictUrlHandler(
+        mockReq,
+        mockRes,
+        dependencies,
+        new AbortController().signal
+      )
 
       // Assert that the primary tier functions were called (they are wrapped by p-limit)
       expect(mockGetVideoStream).toHaveBeenCalled()
@@ -632,7 +687,12 @@ describe('Prediction Handlers', () => {
     it('should return 400 if URL is not detected', async () => {
       mockUtil.extractUrl.mockReturnValue(null)
       mockReq.body.url = 'not a url'
-      await predictUrlHandler(mockReq, mockRes, dependencies)
+      await predictUrlHandler(
+        mockReq,
+        mockRes,
+        dependencies,
+        new AbortController().signal
+      )
       expect(mockRes.status).toHaveBeenCalledWith(400)
       expect(mockRes.json).toHaveBeenCalledWith({
         message: 'URL is not detected',
@@ -645,7 +705,12 @@ describe('Prediction Handlers', () => {
         'http://another.com',
       ])
       mockReq.body.url = 'http://example.com http://another.com'
-      await predictUrlHandler(mockReq, mockRes, dependencies)
+      await predictUrlHandler(
+        mockReq,
+        mockRes,
+        dependencies,
+        new AbortController().signal
+      )
       expect(mockRes.status).toHaveBeenCalledWith(400)
       expect(mockRes.json).toHaveBeenCalledWith({
         message: 'Multiple URLs are not supported',
@@ -678,7 +743,12 @@ describe('Prediction Handlers', () => {
           new Error('Final download failed')
         )
 
-        await predictUrlHandler(mockReq, mockRes, dependencies)
+        await predictUrlHandler(
+          mockReq,
+          mockRes,
+          dependencies,
+          new AbortController().signal
+        )
 
         expect(mockRes.status).toHaveBeenCalledWith(500)
         expect(mockRes.json).toHaveBeenCalledWith({
@@ -694,7 +764,12 @@ describe('Prediction Handlers', () => {
         mockDownloadPartFile.mockResolvedValueOnce(true)
         mockGenerateScreenshot.mockResolvedValueOnce(false) // Simulate failure by returning false
 
-        await predictUrlHandler(mockReq, mockRes, dependencies)
+        await predictUrlHandler(
+          mockReq,
+          mockRes,
+          dependencies,
+          new AbortController().signal
+        )
 
         expect(mockRes.status).toHaveBeenCalledWith(500)
         expect(mockRes.json).toHaveBeenCalledWith({
@@ -712,7 +787,12 @@ describe('Prediction Handlers', () => {
           new Error('Cannot read file')
         )
 
-        await predictUrlHandler(mockReq, mockRes, dependencies)
+        await predictUrlHandler(
+          mockReq,
+          mockRes,
+          dependencies,
+          new AbortController().signal
+        )
 
         expect(mockRes.status).toHaveBeenCalledWith(500)
         expect(mockRes.json).toHaveBeenCalledWith({
@@ -742,7 +822,12 @@ describe('Prediction Handlers', () => {
           expectedClassification
         )
 
-        await predictUrlHandler(mockReq, mockRes, dependencies)
+        await predictUrlHandler(
+          mockReq,
+          mockRes,
+          dependencies,
+          new AbortController().signal
+        )
 
         // Verify file-based functions were called
         expect(mockDownloadPartFile).toHaveBeenCalled()
@@ -897,7 +982,12 @@ describe('Prediction Handlers', () => {
       const downloadError = new Error('Network error')
       mockDownloadPartFile.mockRejectedValueOnce(downloadError)
 
-      await predictUrlHandler(mockReq, mockRes, dependencies)
+      await predictUrlHandler(
+        mockReq,
+        mockRes,
+        dependencies,
+        new AbortController().signal
+      )
 
       expect(mockRes.status).toHaveBeenCalledWith(500)
       expect(mockRes.json).toHaveBeenCalledWith({
@@ -913,7 +1003,12 @@ describe('Prediction Handlers', () => {
       mockDownloadPartFile.mockResolvedValueOnce({ status: 'downloaded' })
       mockGenerateScreenshot.mockRejectedValueOnce(screenshotError)
 
-      await predictUrlHandler(mockReq, mockRes, dependencies)
+      await predictUrlHandler(
+        mockReq,
+        mockRes,
+        dependencies,
+        new AbortController().signal
+      )
 
       expect(mockRes.status).toHaveBeenCalledWith(500)
       expect(mockRes.json).toHaveBeenCalledWith({
@@ -929,7 +1024,12 @@ describe('Prediction Handlers', () => {
       const downloadError = new Error('Image download failed')
       mockDownloadFile.mockRejectedValueOnce(downloadError)
 
-      await predictUrlHandler(mockReq, mockRes, dependencies)
+      await predictUrlHandler(
+        mockReq,
+        mockRes,
+        dependencies,
+        new AbortController().signal
+      )
 
       expect(mockRes.status).toHaveBeenCalledWith(500)
       expect(mockRes.json).toHaveBeenCalledWith({
@@ -947,7 +1047,12 @@ describe('Prediction Handlers', () => {
         processError
       )
 
-      await predictUrlHandler(mockReq, mockRes, dependencies)
+      await predictUrlHandler(
+        mockReq,
+        mockRes,
+        dependencies,
+        new AbortController().signal
+      )
 
       expect(mockRes.status).toHaveBeenCalledWith(500)
       expect(mockRes.json).toHaveBeenCalledWith({
@@ -964,7 +1069,12 @@ describe('Prediction Handlers', () => {
       mockImageProcessingInstance.processImageFile.mockResolvedValueOnce({})
       mockNsfwSpy.classifyImageFile.mockRejectedValueOnce(classifyError)
 
-      await predictUrlHandler(mockReq, mockRes, dependencies)
+      await predictUrlHandler(
+        mockReq,
+        mockRes,
+        dependencies,
+        new AbortController().signal
+      )
 
       expect(mockRes.status).toHaveBeenCalledWith(500)
       expect(mockRes.json).toHaveBeenCalledWith({
@@ -988,7 +1098,12 @@ describe('Prediction Handlers', () => {
       mockUtil.isContentTypeImageType.mockReturnValueOnce(false)
       mockUtil.isContentTypeVideoType.mockReturnValueOnce(false)
 
-      await predictUrlHandler(mockReq, mockRes, dependencies)
+      await predictUrlHandler(
+        mockReq,
+        mockRes,
+        dependencies,
+        new AbortController().signal
+      )
 
       expect(mockRes.status).toHaveBeenCalledWith(500)
       expect(mockRes.json).toHaveBeenCalledWith({
@@ -1002,7 +1117,12 @@ describe('Prediction Handlers', () => {
       const contentInfoError = new Error('Failed to fetch headers')
       mockGetContentInfo.mockRejectedValueOnce(contentInfoError)
 
-      await predictUrlHandler(mockReq, mockRes, dependencies)
+      await predictUrlHandler(
+        mockReq,
+        mockRes,
+        dependencies,
+        new AbortController().signal
+      )
 
       expect(mockRes.status).toHaveBeenCalledWith(500)
       expect(mockRes.json).toHaveBeenCalledWith({

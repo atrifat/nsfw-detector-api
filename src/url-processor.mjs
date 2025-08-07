@@ -66,7 +66,8 @@ export const processUrlForPrediction = async (
     limit,
     config,
     Mutex,
-  }
+  },
+  signal
 ) => {
   const {
     IMG_DOWNLOAD_PATH,
@@ -152,7 +153,8 @@ export const processUrlForPrediction = async (
           const result = await getScreenshotBufferWithFallbacks(
             url,
             filename,
-            params
+            params,
+            signal
           )
           if (result?.tempFilesCreated?.length) {
             tempFilesCreated.push(...result.tempFilesCreated)
@@ -171,7 +173,8 @@ export const processUrlForPrediction = async (
           downloadFileToBuffer(
             url,
             REQUEST_TIMEOUT_IN_SECONDS * 1000,
-            extraHeaders
+            extraHeaders,
+            signal
           )
         ) // Download image directly to buffer
         if (errDownload) {
@@ -192,7 +195,8 @@ export const processUrlForPrediction = async (
             videoFile,
             MAX_VIDEO_SIZE_MB * 1024 * 1024,
             REQUEST_TIMEOUT_IN_SECONDS * 1000,
-            extraHeaders
+            extraHeaders,
+            signal
           )
         )
         if (errDownload) {
@@ -224,7 +228,8 @@ export const processUrlForPrediction = async (
             url,
             downloadedFile,
             REQUEST_TIMEOUT_IN_SECONDS * 1000,
-            extraHeaders
+            extraHeaders,
+            signal
           )
         )
         if (errDownload) {

@@ -49,7 +49,8 @@ export const downloadFile = async function (
   src,
   dest,
   timeout = 60000,
-  extraHeaders = {}
+  extraHeaders = {},
+  signal
 ) {
   try {
     const response = await axios({
@@ -58,6 +59,7 @@ export const downloadFile = async function (
       responseType: 'stream',
       headers: extraHeaders,
       timeout: timeout,
+      signal,
     })
 
     if (response?.data && response.status === 200) {
@@ -100,7 +102,8 @@ export const downloadFile = async function (
 export const downloadFileToBuffer = async function (
   src,
   timeout = 60000,
-  extraHeaders = {}
+  extraHeaders = {},
+  signal
 ) {
   try {
     const response = await axios({
@@ -109,6 +112,7 @@ export const downloadFileToBuffer = async function (
       responseType: 'arraybuffer',
       headers: extraHeaders,
       timeout: timeout,
+      signal,
     })
 
     if (response?.data && response.status === 200) {
@@ -177,7 +181,8 @@ export const downloadPartFile = async (
   outputFile,
   maxVideoSize,
   timeout = 60000,
-  extraHeaders = {}
+  extraHeaders = {},
+  signal
 ) => {
   const { finalUrl: redirectedUrl, response } = await handleRedirects(
     url,
@@ -198,6 +203,7 @@ export const downloadPartFile = async (
       headers: extraHeaders,
       responseType: 'stream',
       timeout: timeout,
+      signal,
     })
     await saveOutput(outputFile, getResponse, downloadSize)
     return true
@@ -213,6 +219,7 @@ export const downloadPartFile = async (
     headers: rangeHeaders,
     responseType: 'stream',
     timeout: timeout,
+    signal,
   })
 
   if (partialResponse.status === 206 || partialResponse.status === 200) {
@@ -242,7 +249,8 @@ export const downloadPartFileToBuffer = async (
   url,
   maxVideoSize,
   timeout = 60000,
-  extraHeaders = {}
+  extraHeaders = {},
+  signal
 ) => {
   const { finalUrl: redirectedUrl, response } = await handleRedirects(
     url,
@@ -263,6 +271,7 @@ export const downloadPartFileToBuffer = async (
       headers: extraHeaders,
       responseType: 'arraybuffer',
       timeout: timeout,
+      signal,
     })
     if (getResponse?.data && getResponse.status === 200) {
       return Buffer.from(getResponse.data)
@@ -281,6 +290,7 @@ export const downloadPartFileToBuffer = async (
     headers: rangeHeaders,
     responseType: 'arraybuffer',
     timeout: timeout,
+    signal,
   })
 
   if (partialResponse.status === 206 || partialResponse.status === 200) {
@@ -342,7 +352,12 @@ export const getContentInfo = async function (
  * @param {string} url - The validated video URL to fetch.
  * @returns {Promise<ReadableStream>} - A promise resolving to the readable stream.
  */
-export async function getVideoStream(url, extraHeaders = {}, timeout = 60000) {
+export async function getVideoStream(
+  url,
+  extraHeaders = {},
+  timeout = 60000,
+  signal
+) {
   let response
   try {
     response = await axios.get(url, {
@@ -350,6 +365,7 @@ export async function getVideoStream(url, extraHeaders = {}, timeout = 60000) {
       timeout: timeout,
       headers: { 'User-Agent': extraHeaders['User-Agent'] },
       maxRedirects: 5, // Follow redirects
+      signal,
     })
 
     // Axios generally throws for >= 400, but explicit check is safe

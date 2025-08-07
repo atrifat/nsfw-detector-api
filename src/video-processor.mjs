@@ -22,7 +22,8 @@ import {
 export const getScreenshotBufferWithFallbacks = async (
   url,
   filename,
-  params
+  params,
+  signal
 ) => {
   const {
     limit,
@@ -39,11 +40,13 @@ export const getScreenshotBufferWithFallbacks = async (
   // --- TIER 1: Attempt efficient streaming (fastest path) ---
   console.debug(`[Tier 1] Processing video via streaming for ${url}`)
   ;[err, videoStream] = await to(
-    limit(() => getVideoStream(url, extraHeaders, REQUEST_TIMEOUT_MS))
+    limit(() => getVideoStream(url, extraHeaders, REQUEST_TIMEOUT_MS, signal))
   )
   if (!err) {
     ;[err, screenshotBuffer] = await to(
-      limit(() => generateScreenshotFromStream(videoStream, FFMPEG_PATH))
+      limit(() =>
+        generateScreenshotFromStream(videoStream, FFMPEG_PATH, { signal })
+      )
     )
     if (!err) {
       downloadStatus = { status: 'screenshot from stream' }
@@ -64,13 +67,16 @@ export const getScreenshotBufferWithFallbacks = async (
         url,
         MAX_VIDEO_SIZE_BYTES,
         REQUEST_TIMEOUT_MS,
-        extraHeaders
+        extraHeaders,
+        signal
       )
     )
   )
   if (!err) {
     ;[err, screenshotBuffer] = await to(
-      limit(() => generateScreenshotFromBuffer(videoBuffer, FFMPEG_PATH))
+      limit(() =>
+        generateScreenshotFromBuffer(videoBuffer, FFMPEG_PATH, { signal })
+      )
     )
     if (!err) {
       downloadStatus = { status: 'screenshot from partial buffer (fallback)' }
@@ -101,7 +107,8 @@ export const getScreenshotBufferWithFallbacks = async (
         tempVideoFile,
         MAX_VIDEO_SIZE_BYTES,
         REQUEST_TIMEOUT_MS,
-        extraHeaders
+        extraHeaders,
+        signal
       )
     )
   )
