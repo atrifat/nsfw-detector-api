@@ -20,7 +20,7 @@ export const processData = processDataForPrediction
  * @param {object} res - Express response object.
  * @param {object} dependencies - Injected dependencies.
  */
-export const predictUrlHandler = async (req, res, dependencies) => {
+export const predictUrlHandler = async (req, res, dependencies, signal) => {
   const url = req.body.url ?? ''
 
   // Validate URL
@@ -33,7 +33,9 @@ export const predictUrlHandler = async (req, res, dependencies) => {
   }
 
   // Process the URL and get the prediction result
-  const [err, result] = await to(processUrl(extractedUrl[0], dependencies))
+  const [err, result] = await to(
+    processUrl(extractedUrl[0], dependencies, signal)
+  )
 
   if (err) {
     // Error handling is now centralized in processUrlForPrediction, just return the error response

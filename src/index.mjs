@@ -121,16 +121,29 @@ app.get('/', (req, res) => {
  * @param {object} res - Express response object.
  */
 app.post('/predict', validateRequest(predictUrlSchema), async (req, res) => {
-  await predictUrlHandler(req, res, {
-    nsfwSpy,
-    imageProcessingInstance,
-    resultCache,
-    mutexes,
-    limit, // Pass the global limiter
-    config, // Pass the config object
-    cleanupTemporaryFile,
-    Mutex, // Pass the Mutex class itself
+  const abortController = new AbortController()
+  req.on('close', () => {
+    if (!res.writableEnded) {
+      abortController.abort()
+      console.log('Client disconnected, aborting request.')
+    }
   })
+
+  await predictUrlHandler(
+    req,
+    res,
+    {
+      nsfwSpy,
+      imageProcessingInstance,
+      resultCache,
+      mutexes,
+      limit,
+      config,
+      cleanupTemporaryFile,
+      Mutex,
+    },
+    abortController.signal
+  )
 })
 
 /**
