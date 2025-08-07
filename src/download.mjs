@@ -87,6 +87,9 @@ export const downloadFile = async function (
       throw new Error(`Failed to download file. Status: ${response.status}`)
     }
   } catch (e) {
+    console.error(
+      `Download failed: ${e.message}. Aborted: ${signal ? signal.aborted : 'N/A'}`
+    )
     throw new Error(`Download failed: ${e.message}`)
   }
 }
@@ -121,6 +124,9 @@ export const downloadFileToBuffer = async function (
       throw new Error(`Failed to download file. Status: ${response.status}`)
     }
   } catch (e) {
+    console.error(
+      `Download failed: ${e.message}. Aborted: ${signal ? signal.aborted : 'N/A'}`
+    )
     throw new Error(`Download failed: ${e.message}`)
   }
 }
@@ -229,6 +235,9 @@ export const downloadPartFile = async (
   } else if (partialResponse.status === 416) {
     throw new Error('Server does not support Range header request.')
   } else {
+    console.error(
+      `Failed to download partial file. Status: ${partialResponse.status}. Aborted: ${signal?.aborted}`
+    )
     throw new Error(
       `Failed to download partial file. Status: ${partialResponse.status}`
     )
@@ -304,6 +313,9 @@ export const downloadPartFileToBuffer = async (
   } else if (partialResponse.status === 416) {
     throw new Error('Server does not support Range header request.')
   } else {
+    console.error(
+      `Failed to download partial file. Status: ${partialResponse.status}. Aborted: ${signal?.aborted}`
+    )
     throw new Error(
       `Failed to download partial file. Status: ${partialResponse.status}`
     )
@@ -341,6 +353,7 @@ export const getContentInfo = async function (
 
     return output
   } else {
+    console.error(`Failed to get content info. Status: ${response.status}`)
     throw new Error(`Failed to get content info. Status: ${response.status}`)
   }
 }
@@ -392,10 +405,16 @@ export async function getVideoStream(
     return response.data // response.data is the readable stream
   } catch (error) {
     if (axios.isAxiosError(error)) {
+      console.error(
+        `Failed to get video stream: ${error.message} (Status: ${error.response?.status || 'N/A'}). Aborted: ${signal ? signal.aborted : 'N/A'}`
+      )
       throw new Error(
         `Failed to get video stream: ${error.message} (Status: ${error.response?.status || 'N/A'})`
       )
     } else {
+      console.error(
+        `Failed to get video stream: ${error.message}. Aborted: ${signal ? signal.aborted : 'N/A'}`
+      )
       throw error // Re-throw other errors
     }
   } finally {
@@ -460,10 +479,14 @@ export async function getVideoBuffer(url, extraHeaders = {}, timeout = 30000) {
     return videoBuffer
   } catch (error) {
     if (axios.isAxiosError(error)) {
+      console.error(
+        `Failed to get video buffer: ${error.message} (Status: ${error.response?.status || 'N/A'})`
+      )
       throw new Error(
         `Failed to get video buffer: ${error.message} (Status: ${error.response?.status || 'N/A'})`
       )
     } else {
+      console.error(`Failed to get video buffer: ${error.message}`)
       throw error
     }
   }

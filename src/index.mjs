@@ -19,7 +19,7 @@ import pLimit from 'p-limit'
 // --- Global Concurrency Limiter ---
 const limit = pLimit(config.VIDEO_PROCESSING_CONCURRENCY)
 
-const app = express()
+export const app = express()
 
 // Middleware to parse JSON request bodies
 app.use(bodyparser.json({ limit: '5mb' }))
@@ -122,11 +122,13 @@ app.get('/', (req, res) => {
  */
 app.post('/predict', validateRequest(predictUrlSchema), async (req, res) => {
   const abortController = new AbortController()
-  req.on('close', () => {
-    if (!res.writableEnded) {
-      abortController.abort()
-      console.log('Client disconnected, aborting request.')
+  req.on('aborted', () => {
+    if (res.writableEnded) {
+      // If response has already been sent, no need to abort
+      return
     }
+    abortController.abort()
+    console.log('Client disconnected, aborting request.')
   })
 
   await predictUrlHandler(

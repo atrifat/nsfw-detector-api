@@ -221,7 +221,13 @@ describe('Download Utilities', () => {
       }))
       const { downloadFile } = await import('../src/download.mjs')
       await expect(
-        downloadFile('http://example.com/file.txt', 'some/path')
+        downloadFile(
+          'http://example.com/file.txt',
+          'some/path',
+          undefined,
+          undefined,
+          undefined
+        )
       ).rejects.toThrow('Download failed: Failed to download file. Status: 500')
     })
 
@@ -287,7 +293,12 @@ describe('Download Utilities', () => {
       }))
       const { downloadFileToBuffer } = await import('../src/download.mjs')
       await expect(
-        downloadFileToBuffer('http://example.com/file.txt')
+        downloadFileToBuffer(
+          'http://example.com/file.txt',
+          undefined,
+          undefined,
+          undefined
+        )
       ).rejects.toThrow('Download failed: Failed to download file. Status: 500')
     })
   })
@@ -488,7 +499,14 @@ describe('Download Utilities', () => {
       }))
       const { downloadPartFile } = await import('../src/download.mjs')
       await expect(
-        downloadPartFile('http://example.com/video.mp4', 'some/path', 1000)
+        downloadPartFile(
+          'http://example.com/video.mp4',
+          'some/path',
+          1000,
+          undefined,
+          undefined,
+          undefined
+        )
       ).rejects.toThrow('Failed to download partial file. Status: 500')
     })
 
@@ -691,7 +709,13 @@ describe('Download Utilities', () => {
       }))
       const { downloadPartFileToBuffer } = await import('../src/download.mjs')
       await expect(
-        downloadPartFileToBuffer('http://example.com/video.mp4', 1000)
+        downloadPartFileToBuffer(
+          'http://example.com/video.mp4',
+          1000,
+          undefined,
+          undefined,
+          undefined
+        )
       ).rejects.toThrow('Failed to download partial file. Status: 500')
     })
 

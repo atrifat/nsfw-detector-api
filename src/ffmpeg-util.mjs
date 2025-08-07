@@ -37,7 +37,9 @@ export const generateScreenshot = async (
     await runCommand(ffmpegBinary, args, { timeout: 15000 }) // Set a 15-second timeout
     return true
   } catch (err) {
-    console.error(`Error generating screenshot: ${err.message}`)
+    console.error(
+      `Error generating screenshot: ${err.message}. Aborted: ${err.code === 'ABORT_ERR'}`
+    )
     return false
   }
 }
@@ -132,7 +134,12 @@ export function generateScreenshotFromBuffer(
       (data) => (outputBuffer = Buffer.concat([outputBuffer, data]))
     )
     ffmpegProcess.stderr.on('data', (data) => (stderrOutput += data.toString()))
-    ffmpegProcess.on('error', (err) => cleanup(err))
+    ffmpegProcess.on('error', (err) => {
+      console.error(
+        `FFmpeg process error: ${err.message}. Aborted: ${signal?.aborted}`
+      )
+      cleanup(err)
+    })
 
     ffmpegProcess.on('close', (code) => {
       clearTimeout(timeoutHandle)
@@ -251,6 +258,9 @@ export function generateScreenshotFromStream(
       stderrOutput += data.toString()
     })
     ffmpegProcess.on('error', (err) => {
+      console.error(
+        `FFmpeg process error: ${err.message}. Aborted: ${signal?.aborted}`
+      )
       cleanup(err)
     })
 

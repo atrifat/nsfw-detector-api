@@ -367,7 +367,7 @@ describe('generateScreenshot', () => {
     )
     expect(result).toBe(false)
     expect(consoleErrorSpy).toHaveBeenCalledWith(
-      'Error generating screenshot: ffmpeg failed'
+      'Error generating screenshot: ffmpeg failed. Aborted: false'
     )
     consoleErrorSpy.mockRestore()
   })
