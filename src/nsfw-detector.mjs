@@ -1,4 +1,13 @@
 // This wrapper code is based on the original NsfwSpyJs, modified to support GPU acceleration if available.
+import util from 'node:util'
+
+// TODO: Polyfill for util.isNullOrUndefined() which was removed in Node.js 24
+// This is a workaround until @tensorflow/tfjs-node-gpu is updated to not use the deprecated util.isNullOrUndefined()
+// Consider migrating to a more actively maintained NSFW detection library or TensorFlow backend
+if (!util.isNullOrUndefined) {
+  util.isNullOrUndefined = (obj) => obj == null
+}
+
 import * as tf from '@tensorflow/tfjs-node-gpu'
 import * as fs from 'fs/promises'
 
