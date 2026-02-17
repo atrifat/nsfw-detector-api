@@ -85,9 +85,8 @@ describe('url-processor concurrency', () => {
 
     // Since the first call's result is now cached, the second call will return immediately
     // and not even enter the mutex-protected block. Let's find the prediction pipeline mock.
-    const { runImagePredictionPipeline } = await import(
-      '../src/image-prediction-pipeline.mjs'
-    )
+    const { runImagePredictionPipeline } =
+      await import('../src/image-prediction-pipeline.mjs')
     expect(runImagePredictionPipeline).toHaveBeenCalledTimes(1)
 
     const enterEvents = eventLog.filter((e) => e.event === 'enter')
