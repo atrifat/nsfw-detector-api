@@ -2,10 +2,10 @@ name: CI
 
 on:
   push:
-    branches: ["main", "dev"]
-    tags: ["v*"]
+    branches: ['main', 'dev']
+    tags: ['v*']
   pull_request:
-    branches: ["main"]
+    branches: ['main']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -27,7 +27,7 @@ jobs:
         uses: lewagon/wait-on-check-action@v1.4.0
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          check-name: "check"
+          check-name: 'check'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 30
           allowed-conclusions: success
@@ -58,7 +58,9 @@ jobs:
         if: ${{ !env.ACT }}
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          # ARM64 temporarily disabled due to TAR_SYMLINK_ERROR with @tensorflow/tfjs-node-gpu
+          # See issue #40 for details
+          platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

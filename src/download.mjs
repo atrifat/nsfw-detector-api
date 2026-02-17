@@ -90,7 +90,7 @@ export const downloadFile = async function (
     console.error(
       `Download failed: ${e.message}. Aborted: ${signal ? signal.aborted : 'N/A'}`
     )
-    throw new Error(`Download failed: ${e.message}`)
+    throw new Error(`Download failed: ${e.message}`, { cause: e })
   }
 }
 
@@ -127,7 +127,7 @@ export const downloadFileToBuffer = async function (
     console.error(
       `Download failed: ${e.message}. Aborted: ${signal ? signal.aborted : 'N/A'}`
     )
-    throw new Error(`Download failed: ${e.message}`)
+    throw new Error(`Download failed: ${e.message}`, { cause: e })
   }
 }
 
@@ -409,7 +409,8 @@ export async function getVideoStream(
         `Failed to get video stream: ${error.message} (Status: ${error.response?.status || 'N/A'}). Aborted: ${signal ? signal.aborted : 'N/A'}`
       )
       throw new Error(
-        `Failed to get video stream: ${error.message} (Status: ${error.response?.status || 'N/A'})`
+        `Failed to get video stream: ${error.message} (Status: ${error.response?.status || 'N/A'})`,
+        { cause: error }
       )
     } else {
       console.error(
@@ -483,7 +484,8 @@ export async function getVideoBuffer(url, extraHeaders = {}, timeout = 30000) {
         `Failed to get video buffer: ${error.message} (Status: ${error.response?.status || 'N/A'})`
       )
       throw new Error(
-        `Failed to get video buffer: ${error.message} (Status: ${error.response?.status || 'N/A'})`
+        `Failed to get video buffer: ${error.message} (Status: ${error.response?.status || 'N/A'})`,
+        { cause: error }
       )
     } else {
       console.error(`Failed to get video buffer: ${error.message}`)
